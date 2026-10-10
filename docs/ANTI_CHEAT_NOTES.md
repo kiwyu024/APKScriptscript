@@ -44,4 +44,4 @@ Log every touch (client) and every solved round (server):
 3. **Per-player model:** compare a player's features with the population and with their own history. Bots
    are often *too* average, and too stable across days.
 4. **Run this bot against it:** with humanize off (obvious bot), then on with default settings, then with the
-   ranges pushed. The tap log CSV (`Download/TerraMineBot`) gives the ground truth for each tap.
+   ranges pushed. The tap log CSV (`Download/TapAssist`) gives the ground truth for each tap.
