@@ -6,11 +6,13 @@ import android.net.Uri;
 import android.os.Bundle;
 import android.provider.Settings;
 import android.text.InputType;
+import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.CheckBox;
 import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
+import android.widget.Spinner;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -22,18 +24,8 @@ public class MainActivity extends Activity {
     LinearLayout col;
     TextView serviceState;
     final Map<String, EditText> fields = new LinkedHashMap<>();
+    Spinner dir;
     CheckBox back, debug, humanize, logTaps, handleAds, takeBreaks;
-
-    static final String ADS_HELP =
-            "For testing your own app with Google test ads (AdMob test ad units or a registered test device).\n\n" +
-            "Setup (one time):\n" +
-            "1. Tap 'App info', then ⋮ (top right) → 'Allow restricted settings'.\n" +
-            "2. Tap 'Accessibility settings' → Installed apps → Ad Tester → On.\n" +
-            "3. Press ▶ on the floating panel, open your app and trigger ads.\n\n" +
-            "Each ad gets a random viewer type (watch / impatient / skipper, mix below). Only ads showing the " +
-            "'Test Ad' / 'Test mode' label are touched; anything else is left alone and automation pauses for the " +
-            "session. Every ad is logged (start, when the X appeared, each action, how it ended) to " +
-            "Download/AdTester as CSV when you press stop.";
 
     static final String HELP =
             "Setup (one time):\n" +
@@ -49,7 +41,6 @@ public class MainActivity extends Activity {
     protected void onCreate(Bundle b) {
         super.onCreate(b);
         cfg = Config.load(this);
-        boolean adsOnly = getResources().getBoolean(R.bool.ads_only);
         ScrollView sv = new ScrollView(this);
         col = new LinearLayout(this);
         col.setOrientation(LinearLayout.VERTICAL);
@@ -58,25 +49,24 @@ public class MainActivity extends Activity {
         sv.addView(col);
         setContentView(sv);
 
-        title(getString(R.string.app_name));
+        title("Tap Assist");
         serviceState = new TextView(this);
         col.addView(serviceState);
         button("Accessibility settings", () -> startActivity(new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)));
         button("App info (allow restricted settings)", () -> startActivity(
                 new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:" + getPackageName()))));
         TextView help = new TextView(this);
-        help.setText(adsOnly ? ADS_HELP : HELP);
+        help.setText(HELP);
         help.setPadding(0, pad / 2, 0, pad / 2);
         col.addView(help);
 
-        if (!adsOnly) {
         title("Puzzle");
+        dir = spinner("Tap rotates", new String[]{"clockwise", "counter-clockwise", "learn (uses 1 tap)"},
+                cfg.tapDir > 0 ? "clockwise" : cfg.tapDir < 0 ? "counter-clockwise" : "learn (uses 1 tap)");
         num("edgeThreshold", "Road detection threshold (default 60)", cfg.edgeThreshold);
         num("tapDelayMs", "Delay between taps, ms", cfg.tapDelayMs);
         num("settleMs", "Wait after tapping, ms", cfg.settleMs);
         num("loopMs", "Loop interval, ms", cfg.loopMs);
-
-        }
 
         title("Humanize (anti-cheat testing)");
         humanize = check("Humanize taps", cfg.humanize);
@@ -86,7 +76,6 @@ public class MainActivity extends Activity {
         num("pressMinMs", "Press length min, ms", cfg.pressMinMs);
         num("pressMaxMs", "Press length max, ms", cfg.pressMaxMs);
         num("driftPx", "Finger drift while pressed, px (keep ≤ 8)", cfg.driftPx);
-        if (!adsOnly) {
         num("hesitationPct", "Hesitation chance per tile move, % (0.7-3 s)", cfg.hesitationPct);
         num("distractionPct", "Distraction chance per round, % (5-25 s pause)", cfg.distractionPct);
         num("thinkMinMs", "Pause before solving, min ms", cfg.thinkMinMs);
@@ -109,33 +98,23 @@ public class MainActivity extends Activity {
         num("breakEveryMax", "Break every N rounds, max", cfg.breakEveryMax);
         num("breakMinSec", "Break length, min seconds", cfg.breakMinSec);
         num("breakMaxSec", "Break length, max seconds", cfg.breakMaxSec);
-        }
-        logTaps = check("Log every tap and event to Download/" + getString(R.string.files_folder)
-                + " (CSV, saved on stop)", cfg.logTaps);
+        logTaps = check("Log every tap to Download/TapAssist (CSV, saved on stop)", cfg.logTaps);
 
-        if (!adsOnly) {
         title("Replay");
         text("playTexts", "Replay button texts (comma separated)", cfg.playTexts);
         num("replayGapSec", "Min seconds between replay taps", cfg.replayGapSec);
-        }
 
-        title("Ads (test ads only)");
-        if (!adsOnly) {
-            handleAds = check("Watch & close ads automatically (only with AdMob test ads)", cfg.handleAds);
-            note("Off: the bot stops at 'Watch Ad' screens and leaves ads alone. On: it only acts on ads " +
-                    "labelled 'Test Ad' / 'Test mode'; a real ad pauses ad automation for the session.");
-        }
-        num("adWatchPct", "Viewer mix: watch (waits for the X), %", cfg.adWatchPct);
-        num("adImpatientPct", "Viewer mix: impatient (tries to close early), %", cfg.adImpatientPct);
-        num("adSkipperPct", "Viewer mix: skipper (Back, then leaves and returns), %", cfg.adSkipperPct);
+        title("Ads");
+        handleAds = check("Watch & close ads automatically (only with AdMob test ads)", cfg.handleAds);
+        note("Off: the bot stops at 'Watch Ad' screens and leaves ads alone.");
         num("xThreshold", "Close-X detection threshold (default 20)", cfg.xThreshold);
         num("adTimeoutSec", "If no X after this many seconds, tap corners / Back", cfg.adTimeoutSec);
         text("adClosePoints", "Extra X spots to try (x,y;x,y)", cfg.adClosePoints);
         back = check("Press Back if the ad can't be closed", cfg.backAsLastResort);
-        if (!adsOnly) debug = check("Save debug images while running", cfg.debugDump);
+        debug = check("Save debug images while running", cfg.debugDump);
 
         button("Save", this::save);
-        if (!adsOnly) button("Clear manual grid", () -> {
+        button("Clear manual grid", () -> {
             cfg.tlX = cfg.tlY = cfg.brX = cfg.brY = -1;
             cfg.save(this);
             Toast.makeText(this, "Manual grid cleared", Toast.LENGTH_SHORT).show();
@@ -155,34 +134,33 @@ public class MainActivity extends Activity {
 
     void save() {
         try {
-            cfg.edgeThreshold = i("edgeThreshold", cfg.edgeThreshold);
-            cfg.tapDelayMs = i("tapDelayMs", cfg.tapDelayMs); cfg.settleMs = i("settleMs", cfg.settleMs); cfg.loopMs = i("loopMs", cfg.loopMs);
-            cfg.playTexts = t("playTexts", cfg.playTexts);
-            cfg.replayGapSec = i("replayGapSec", cfg.replayGapSec);
-            cfg.xThreshold = i("xThreshold", cfg.xThreshold);
-            cfg.adTimeoutSec = i("adTimeoutSec", cfg.adTimeoutSec);
-            cfg.adClosePoints = t("adClosePoints", cfg.adClosePoints).trim();
-            cfg.backAsLastResort = ck(back, cfg.backAsLastResort);
-            cfg.humanize = ck(humanize, cfg.humanize);
-            cfg.jitterPct = i("jitterPct", cfg.jitterPct);
-            cfg.pressMinMs = i("pressMinMs", cfg.pressMinMs); cfg.pressMaxMs = i("pressMaxMs", cfg.pressMaxMs);
-            cfg.driftPx = i("driftPx", cfg.driftPx);
-            cfg.hesitationPct = i("hesitationPct", cfg.hesitationPct); cfg.distractionPct = i("distractionPct", cfg.distractionPct);
-            cfg.thinkMinMs = i("thinkMinMs", cfg.thinkMinMs); cfg.thinkMaxMs = i("thinkMaxMs", cfg.thinkMaxMs);
-            cfg.reactMinMs = i("reactMinMs", cfg.reactMinMs); cfg.reactMaxMs = i("reactMaxMs", cfg.reactMaxMs);
-            cfg.startLepPct = i("startLepPct", cfg.startLepPct); cfg.startPotPct = i("startPotPct", cfg.startPotPct);
-            cfg.perfectRoundPct = i("perfectRoundPct", cfg.perfectRoundPct);
-            cfg.badTapsMin = i("badTapsMin", cfg.badTapsMin); cfg.badTapsMax = i("badTapsMax", cfg.badTapsMax);
-            cfg.tapsLeftMargin = i("tapsLeftMargin", cfg.tapsLeftMargin);
-            cfg.takeBreaks = ck(takeBreaks, cfg.takeBreaks);
-            cfg.breakEveryMin = i("breakEveryMin", cfg.breakEveryMin); cfg.breakEveryMax = i("breakEveryMax", cfg.breakEveryMax);
-            cfg.breakMinSec = i("breakMinSec", cfg.breakMinSec); cfg.breakMaxSec = i("breakMaxSec", cfg.breakMaxSec);
-            cfg.logTaps = ck(logTaps, cfg.logTaps);
-            cfg.handleAds = ck(handleAds, cfg.handleAds);
-            cfg.debugDump = ck(debug, cfg.debugDump);
-            cfg.adWatchPct = i("adWatchPct", cfg.adWatchPct);
-            cfg.adImpatientPct = i("adImpatientPct", cfg.adImpatientPct);
-            cfg.adSkipperPct = i("adSkipperPct", cfg.adSkipperPct);
+            int d = dir.getSelectedItemPosition();
+            cfg.tapDir = d == 0 ? 1 : d == 1 ? -1 : 0;
+            cfg.edgeThreshold = i("edgeThreshold");
+            cfg.tapDelayMs = i("tapDelayMs"); cfg.settleMs = i("settleMs"); cfg.loopMs = i("loopMs");
+            cfg.playTexts = fields.get("playTexts").getText().toString();
+            cfg.replayGapSec = i("replayGapSec");
+            cfg.xThreshold = i("xThreshold");
+            cfg.adTimeoutSec = i("adTimeoutSec");
+            cfg.adClosePoints = fields.get("adClosePoints").getText().toString().trim();
+            cfg.backAsLastResort = back.isChecked();
+            cfg.humanize = humanize.isChecked();
+            cfg.jitterPct = i("jitterPct");
+            cfg.pressMinMs = i("pressMinMs"); cfg.pressMaxMs = i("pressMaxMs");
+            cfg.driftPx = i("driftPx");
+            cfg.hesitationPct = i("hesitationPct"); cfg.distractionPct = i("distractionPct");
+            cfg.thinkMinMs = i("thinkMinMs"); cfg.thinkMaxMs = i("thinkMaxMs");
+            cfg.reactMinMs = i("reactMinMs"); cfg.reactMaxMs = i("reactMaxMs");
+            cfg.startLepPct = i("startLepPct"); cfg.startPotPct = i("startPotPct");
+            cfg.perfectRoundPct = i("perfectRoundPct");
+            cfg.badTapsMin = i("badTapsMin"); cfg.badTapsMax = i("badTapsMax");
+            cfg.tapsLeftMargin = i("tapsLeftMargin");
+            cfg.takeBreaks = takeBreaks.isChecked();
+            cfg.breakEveryMin = i("breakEveryMin"); cfg.breakEveryMax = i("breakEveryMax");
+            cfg.breakMinSec = i("breakMinSec"); cfg.breakMaxSec = i("breakMaxSec");
+            cfg.logTaps = logTaps.isChecked();
+            cfg.handleAds = handleAds.isChecked();
+            cfg.debugDump = debug.isChecked();
             cfg.save(this);
             Toast.makeText(this, "Saved — restart the bot (■ then ▶) to apply", Toast.LENGTH_LONG).show();
         } catch (NumberFormatException e) {
@@ -190,18 +168,7 @@ public class MainActivity extends Activity {
         }
     }
 
-    /** Field value, or the current setting when this build doesn't show that field. */
-    int i(String k, int def) {
-        EditText e = fields.get(k);
-        return e == null ? def : Integer.parseInt(e.getText().toString().trim());
-    }
-
-    String t(String k, String def) {
-        EditText e = fields.get(k);
-        return e == null ? def : e.getText().toString();
-    }
-
-    static boolean ck(CheckBox c, boolean def) { return c == null ? def : c.isChecked(); }
+    int i(String k) { return Integer.parseInt(fields.get(k).getText().toString().trim()); }
 
     void title(String t) {
         TextView v = new TextView(this);
@@ -247,6 +214,17 @@ public class MainActivity extends Activity {
     }
 
     void text(String k, String l, String v) { field(k, l, v, InputType.TYPE_CLASS_TEXT); }
+
+    Spinner spinner(String label, String[] items, String sel) {
+        TextView l = new TextView(this);
+        l.setText(label);
+        col.addView(l);
+        Spinner s = new Spinner(this);
+        s.setAdapter(new ArrayAdapter<>(this, android.R.layout.simple_spinner_dropdown_item, items));
+        for (int i = 0; i < items.length; i++) if (items[i].equals(sel)) s.setSelection(i);
+        col.addView(s);
+        return s;
+    }
 
     CheckBox check(String t, boolean v) {
         CheckBox c = new CheckBox(this);

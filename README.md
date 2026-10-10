@@ -18,7 +18,7 @@ All measurements are proportional to the screen and board size.
 
 ## Install
 
-1. Copy `dist/TapAssist-0.11.apk` to the phone and install it (allow installs from that app when asked).
+1. Copy `dist/TapAssist-0.8.apk` to the phone and install it (allow installs from that app when asked).
 2. Open **Tap Assist** → **App info** → ⋮ → **Allow restricted settings**. Android 13+ requires this before a
    sideloaded app can use accessibility.
 3. **Accessibility settings** → Installed apps → **Tap Assist** → On.
@@ -55,23 +55,13 @@ With humanize off, taps are exact tile centres, 40 ms long, at fixed intervals, 
 That's the "obvious bot" baseline.
 
 **Log every tap** writes `Download/TapAssist/taps_<time>.csv` when the bot stops
-(`epoch_ms,x,y,press_ms,drift_x,drift_y,kind,detail`; `event` rows record the bot's decisions; kind is `tile`, `overshoot`, `bounce`,
+(`epoch_ms,x,y,press_ms,drift_x,drift_y,kind,detail`; kind is `tile`, `overshoot`, `bounce`,
 `correction`, `wrong_tile`, `grass`, `revisit`, `replay` or `ad_close`), so you can line it up with your anti-cheat telemetry.
-
-## Ad Tester (standalone)
-
-`dist/AdTester-0.11.apk` (package `com.kiwyu.adtester`) is built from the same code and only handles ads, in any
-app. It acts **only on ads labelled as Google test ads** ("Test Ad" / "Test mode"). Any other ad is left alone, and
-ad handling pauses for the session. The same rule applies to Tap Assist's "Watch & close ads" option.
-
-Each ad gets a random viewer type: watch / impatient / skipper (default 60/25/15%, set in the app). See
-[docs/ANTI_CHEAT_NOTES.md](docs/ANTI_CHEAT_NOTES.md#detecting-ad-skipping-rewarded-ads). Every ad is logged to
-`Download/AdTester/taps_<time>.csv` when you press stop.
 
 ## Build
 
 ```
-./gradlew assembleRelease   # needs Android SDK 35; outputs app/build/outputs/apk/{full,adtest}/release/*.apk
+./gradlew assembleRelease   # needs Android SDK 35; output: app/build/outputs/apk/release/app-release.apk
 ```
 
 The release build is signed with the debug key (sideload only).

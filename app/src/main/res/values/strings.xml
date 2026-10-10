@@ -1,4 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- app_name, service_label, service_description and files_folder come from the product flavor (app/build.gradle) -->
+    <string name="app_name">Tap Assist</string>
+    <string name="service_label">Tap Assist</string>
+    <string name="service_description">Automates play in a tile puzzle game: reads the screen with screenshots and performs taps for you. Shows a floating start/stop button while enabled.</string>
 </resources>

@@ -45,29 +45,3 @@ Log every touch (client) and every solved round (server):
    are often *too* average, and too stable across days.
 4. **Run this bot against it:** with humanize off (obvious bot), then on with default settings, then with the
    ranges pushed. The tap log CSV (`Download/TapAssist`) gives the ground truth for each tap.
-
-## Detecting ad skipping (rewarded ads)
-
-The Ad Tester app, and Tap Assist with "Watch & close ads" on, act on **Google test ads only**. Each ad gets one
-viewer type:
-
-- **watch:** waits for the X, then reacts in about 0.3–6 s. Sometimes it's slow to notice; 7% of the time it
-  misses the X and taps again.
-- **impatient:** 1–3 early attempts (taps where the X will be, or Back), then closes fast once the X shows.
-- **skipper:** Back once or twice, then Home, then returns after 2–10 s. In a "close video?" dialog it picks
-  close 80% of the time.
-
-Each ad is logged: start, viewer type, when the X appeared, each action, and how it ended.
-
-What the game can observe, using the Google Mobile Ads SDK callbacks:
-
-| Signal | How |
-|---|---|
-| Ad dismissed without a reward | `FullScreenContentCallback.onAdDismissedFullScreenContent` fires with no `OnUserEarnedRewardListener.onUserEarnedReward` before it. |
-| Very short view | Time from `onAdShowedFullScreenContent` to dismissal. |
-| Left the app during the ad | Your Activity/Application lifecycle (`onStop`/`onStart`, or `ProcessLifecycleOwner`) while the ad is showing. |
-| Repeated Back presses | Not visible to the game while the ad has focus. Infer it from the close-confirmation outcome or a missing reward. |
-| Reward-farming patterns | Rewards per hour, ads started vs rewards earned, and identical time-to-close across many ads (bots are too consistent). |
-
-Grant rewards server-side where you can (AdMob server-side verification callbacks), so a client can't claim a
-reward it didn't earn.

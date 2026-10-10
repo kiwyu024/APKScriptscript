@@ -61,13 +61,13 @@ public class Overlay {
         menu = new LinearLayout(svc);
         menu.setOrientation(LinearLayout.VERTICAL);
         menu.setVisibility(View.GONE);
-        if (!svc.adsOnly()) menu.addView(menuItem("Check board now", v -> snapshot(false)));
-        if (!svc.adsOnly()) menu.addView(menuItem("Save debug snapshot", v -> snapshot(true)));
+        menu.addView(menuItem("Check board now", v -> snapshot(false)));
+        menu.addView(menuItem("Save debug snapshot", v -> snapshot(true)));
         menu.addView(menuItem("Add ad X position", v -> Calibrator.adClose(svc, this)));
         menu.addView(menuItem("Clear ad X positions", v -> {
             Config c = Config.load(svc); c.adClosePoints = ""; c.save(svc); setStatus("Ad X positions cleared");
         }));
-        if (!svc.adsOnly()) menu.addView(menuItem("Manual grid (fallback)", v -> Calibrator.grid(svc, this)));
+        menu.addView(menuItem("Manual grid (fallback)", v -> Calibrator.grid(svc, this)));
         menu.addView(menuItem("Settings", v -> {
             Intent i = new Intent(svc, MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
             svc.startActivity(i);

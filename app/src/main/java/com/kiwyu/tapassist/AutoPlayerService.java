@@ -29,13 +29,12 @@ public class AutoPlayerService extends AccessibilityService {
     final Handler main = new Handler(Looper.getMainLooper());
     final ExecutorService shotExec = Executors.newSingleThreadExecutor();
     Overlay overlay;
-    BotLoop loop;
+    GameLoop loop;
 
     // Foreground tracking (written from main thread, read from worker).
     volatile String fgPackage = "";
     volatile String fgClass = "";
     volatile long adSeenAt = 0;
-    volatile String adPackage = "";   // app that showed the last ad
 
     /** Activity / package fragments used by common ad SDKs. */
     static final String[] AD_MARKERS = {
@@ -64,10 +63,7 @@ public class AutoPlayerService extends AccessibilityService {
         if (p.equals("com.android.systemui") || p.contains("inputmethod") || p.contains("honeyboard")) return;
         fgPackage = p;
         if (c.contains(".") || c.isEmpty()) fgClass = c;   // skip widget-only class names like "FrameLayout"
-        if (isAdName(p) || isAdName(c)) {
-            adSeenAt = System.currentTimeMillis();
-            if (!isAdName(p)) adPackage = p;   // ad activity inside the app that shows it
-        }
+        if (isAdName(p) || isAdName(c)) adSeenAt = System.currentTimeMillis();
     }
 
     static boolean isAdName(String s) {
@@ -94,7 +90,7 @@ public class AutoPlayerService extends AccessibilityService {
 
     // ------------------------------------------------------------------ control
     void startLoop() {
-        if (loop != null && loop.isRunning()) return;
+        if (loop != null && loop.running) return;
         Config cfg = Config.load(this);
         AccessibilityNodeInfo root = getRootInActiveWindow();
         if (root != null && root.getPackageName() != null
@@ -102,7 +98,7 @@ public class AutoPlayerService extends AccessibilityService {
             cfg.gamePackage = root.getPackageName().toString();
             cfg.save(this);
         }
-        loop = adsOnly() ? new AdLoop(this, cfg) : new GameLoop(this, cfg);
+        loop = new GameLoop(this, cfg);
         loop.start();
     }
 
@@ -111,10 +107,7 @@ public class AutoPlayerService extends AccessibilityService {
         loop = null;
     }
 
-    boolean isRunning() { return loop != null && loop.isRunning(); }
-
-    /** The standalone "Ad Tester" build only handles ads. */
-    boolean adsOnly() { return getResources().getBoolean(R.bool.ads_only); }
+    boolean isRunning() { return loop != null && loop.running; }
 
     void status(String s) {
         main.post(() -> { if (overlay != null) overlay.setStatus(s); });

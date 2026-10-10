@@ -206,27 +206,6 @@ public class Vision {
         return band(f, fromY, false);
     }
 
-    /** True when the middle of {@code r} is mostly button yellow or orange (i.e. the button is really drawn). */
-    public static boolean looksLikeButton(Frame f, android.graphics.Rect r) {
-        return looksLikeButton(f, r.left, r.top, r.right, r.bottom);
-    }
-
-    public static boolean looksLikeButton(Frame f, int left, int top, int right, int bottom) {
-        int w = right - left, h = bottom - top;
-        int x0 = left + w / 5, x1 = right - w / 5;
-        int y0 = top + h / 4, y1 = bottom - h / 4;
-        if (x1 <= x0 || y1 <= y0) return false;
-        int n = 0, hit = 0;
-        int sx = Math.max(1, (x1 - x0) / 40), sy = Math.max(1, (y1 - y0) / 10);
-        for (int y = y0; y < y1; y += sy)
-            for (int x = x0; x < x1; x += sx) {
-                int p = f.get(x, y);
-                n++;
-                if (yellow(p) || orange(p)) hit++;
-            }
-        return n > 0 && hit >= n * 0.30f;
-    }
-
     static boolean orange(int p) {
         int R = Frame.r(p), G = Frame.g(p), B = Frame.b(p);
         return R > 225 && G > 120 && G < 190 && B < 90;
