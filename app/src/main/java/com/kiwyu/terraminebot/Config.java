@@ -36,6 +36,8 @@ public class Config {
     public int driftPx = 3;          // finger slide while pressed
     public int thinkMinMs = 700, thinkMaxMs = 2600; // before the first tap of a puzzle
     public int reactMinMs = 600, reactMaxMs = 2200; // before tapping the replay button
+    public int startLepPct = 65;     // rounds that start at the tile next to the leprechaun
+    public int startPotPct = 34;     // ... next to the pot of gold; the rest open with a stray tap elsewhere
     public int perfectRoundPct = 1;  // humanized rounds with no bad taps at all
     public int badTapsMin = 1, badTapsMax = 15;  // bad taps per round (weighted towards fewer)
     public int tapsLeftMargin = 3;   // keep this many of the game's "N left" taps unused
@@ -78,6 +80,8 @@ public class Config {
         k.driftPx = p.getInt("driftPx", k.driftPx);
         k.thinkMinMs = p.getInt("thinkMinMs", k.thinkMinMs); k.thinkMaxMs = p.getInt("thinkMaxMs", k.thinkMaxMs);
         k.reactMinMs = p.getInt("reactMinMs", k.reactMinMs); k.reactMaxMs = p.getInt("reactMaxMs", k.reactMaxMs);
+        k.startLepPct = p.getInt("startLepPct", k.startLepPct);
+        k.startPotPct = p.getInt("startPotPct", k.startPotPct);
         k.perfectRoundPct = p.getInt("perfectRoundPct", k.perfectRoundPct);
         k.badTapsMin = p.getInt("badTapsMin", k.badTapsMin); k.badTapsMax = p.getInt("badTapsMax", k.badTapsMax);
         k.tapsLeftMargin = p.getInt("tapsLeftMargin", k.tapsLeftMargin);
@@ -108,6 +112,7 @@ public class Config {
                 .putInt("pressMinMs", pressMinMs).putInt("pressMaxMs", pressMaxMs).putInt("driftPx", driftPx)
                 .putInt("thinkMinMs", thinkMinMs).putInt("thinkMaxMs", thinkMaxMs)
                 .putInt("reactMinMs", reactMinMs).putInt("reactMaxMs", reactMaxMs)
+                .putInt("startLepPct", startLepPct).putInt("startPotPct", startPotPct)
                 .putInt("perfectRoundPct", perfectRoundPct)
                 .putInt("badTapsMin", badTapsMin).putInt("badTapsMax", badTapsMax)
                 .putInt("tapsLeftMargin", tapsLeftMargin)

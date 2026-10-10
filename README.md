@@ -18,7 +18,7 @@ All measurements are proportional to the screen and board size.
 
 ## Install
 
-1. Copy `dist/TerraMineBot-0.6.apk` to the phone and install it (allow installs from that app when asked).
+1. Copy `dist/TerraMineBot-0.7.apk` to the phone and install it (allow installs from that app when asked).
 2. Open **TerraMine Bot** → **App info** → ⋮ → **Allow restricted settings**. Android 13+ requires this before a
    sideloaded app can use accessibility.
 3. **Accessibility settings** → Installed apps → **TerraMine Bot** → On.
@@ -36,6 +36,9 @@ look at, what the bot does about each one, and what it can't hide (the strongest
 Settings → **Humanize taps** layers randomness at three levels:
 
 - **Session:** a habitual thumb offset and spread, base speed, typical press length, and rounds until a break.
+- **Start habit:** the first tap is always the first tile needing a turn next to the leprechaun (65% of rounds)
+  or next to the gold (34%). The other 1% open with a stray tap on another block, which counts as a bad tap.
+  From there it works along the road from that end. Bad taps never come before the first tap.
 - **Round:** mood (speed factor), slowly growing fatigue (resets after breaks), **1–15 bad taps** (weighted
   towards fewer; 1% of rounds perfect), 0–2 tiles left half-turned and finished later, and a rare 5–25 s distraction.
 - **Tap:** position around the thumb offset (4% sloppy), log-normal press length, finger slide, faster repeat

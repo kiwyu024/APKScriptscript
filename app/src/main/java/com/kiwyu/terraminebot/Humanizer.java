@@ -160,19 +160,32 @@ public class Humanizer {
         return Math.round(cfg.loopMs * (0.7 + rnd.nextDouble() * 0.6));
     }
 
+    /** Where a round starts: the leprechaun end, the gold end, or a stray tap somewhere else first. */
+    enum Start { LEPRECHAUN, GOLD, STRAY }
+
+    /** The start habit for a round: {@code startLepPct}% leprechaun end, {@code startPotPct}% gold end, rest stray. */
+    Start pickStart(boolean allowStray) {
+        int roll = rnd.nextInt(1000);
+        int lep = cfg.startLepPct * 10, pot = cfg.startPotPct * 10;
+        if (roll < lep) return Start.LEPRECHAUN;
+        if (roll < lep + pot) return Start.GOLD;
+        if (allowStray) return Start.STRAY;
+        // no stray tap allowed (perfect round): keep the same lep:gold proportion
+        return rnd.nextInt(Math.max(1, lep + pot)) < lep ? Start.LEPRECHAUN : Start.GOLD;
+    }
+
     /**
-     * Order to visit the tiles that need taps: usually along the road from the leprechaun,
-     * sometimes from the pot end, sometimes shuffled, with neighbours occasionally swapped.
+     * Order to visit the tiles that need taps. The first is always the first tile needing a turn from the
+     * chosen end (next to the leprechaun, or next to the gold); after that it works along the road from that end,
+     * with neighbouring tiles occasionally swapped (never the first). Humanize off: from the leprechaun end, in order.
      */
-    public List<Integer> order(List<Integer> roadOrder, List<Integer> needTaps) {
+    public List<Integer> order(List<Integer> roadOrder, List<Integer> needTaps, boolean fromGold) {
         List<Integer> out = new ArrayList<>();
         for (int i : roadOrder) if (needTaps.contains(i)) out.add(i);
         for (int i : needTaps) if (!out.contains(i)) out.add(i);
-        if (!on()) { Collections.sort(out); return out; }
-        int roll = rnd.nextInt(100);
-        if (roll < 20) Collections.reverse(out);
-        else if (roll < 35) Collections.shuffle(out, rnd);
-        for (int i = 0; i + 1 < out.size(); i++)
+        if (fromGold) Collections.reverse(out);
+        if (!on()) return out;
+        for (int i = 1; i + 1 < out.size(); i++)
             if (rnd.nextInt(100) < 15) Collections.swap(out, i, i + 1);
         return out;
     }
@@ -217,22 +230,31 @@ public class Humanizer {
         List<String> none = new ArrayList<>();
         if (need.isEmpty()) return new Plan(new ArrayList<>(), b.masks.clone(), 0, none);
         if (!on()) {
-            List<Action> base = base(road, need, turns, tapDir);
+            List<Action> base = base(road, need, turns, tapDir, false);
             return new Plan(base, simulate(b, base, tapDir, false), 0, none);
         }
         boolean perfect = !firstAttempt || rnd.nextInt(1000) < cfg.perfectRoundPct * 10;
         int wantBad = perfect ? 0 : pickBadTaps(Math.max(0, tapCap));
         int wantRevisits = perfect ? 0 : rnd.nextInt(3);
         Set<Integer> roadSet = new HashSet<>(road);
+        // the start habit is decided once per round, so retries below don't skew the percentages
+        Start start = pickStart(wantBad > 0);
+        boolean fromGold = start == Start.GOLD;
+        int stray = start == Start.STRAY ? pickStray(b, roadSet, road, need) : -1;
+        if (start == Start.STRAY && stray < 0) start = Start.LEPRECHAUN;   // nowhere sensible to stray to
         List<Action> fallback = null;
         for (int attempt = 0; attempt < 150; attempt++) {
             // fresh order each attempt: some orders connect a side road early whatever we do
-            List<Action> p = base(road, need, turns, tapDir);
+            List<Action> p = base(road, need, turns, tapDir, fromGold);
             if (fallback == null) fallback = copy(p);
             List<String> done = new ArrayList<>();
+            if (start == Start.STRAY) done.add("opened with a stray tap on " + name(b, stray));
+            else done.add("started at the " + (fromGold ? "gold" : "leprechaun") + " end");
             // later attempts settle for fewer bad taps
             int target = attempt < 50 ? wantBad : attempt < 100 ? (wantBad + 1) / 2 : Math.min(wantBad, 1);
-            int bad = 0, guard = 0;
+            if (start == Start.STRAY) target = Math.max(0, target - 1);   // the stray tap is one of them
+            int bad = start == Start.STRAY ? 1 : 0, guard = 0;
+            target += bad;
             while (bad < target && guard++ < 40) {
                 int added = addMistake(b, p, roadSet, turns, tapDir, target - bad, done);
                 if (added <= 0) break;
@@ -240,16 +262,39 @@ public class Humanizer {
             }
             if (!perfect && bad == 0 && wantBad > 0) continue;
             for (int r = 0; r < wantRevisits; r++) addRevisit(b, p, done);
+            if (start == Start.STRAY) p.add(0, new Action(stray, 1, b.masks[stray] == 0 ? "grass" : "wrong_tile"));
             int[] fin = simulate(b, p, tapDir, true);
             if (fin != null) return new Plan(p, fin, bad, done);
         }
-        return new Plan(fallback, simulate(b, fallback, tapDir, false), 0, none);
+        List<String> note = new ArrayList<>();
+        note.add("started at the " + (fromGold ? "gold" : "leprechaun") + " end");
+        return new Plan(fallback, simulate(b, fallback, tapDir, false), 0, note);
     }
 
-    List<Action> base(List<Integer> road, List<Integer> need, int[] turns, int tapDir) {
+    /**
+     * Taps for each tile that needs it, in habit order. A lone tile needing several turns is split
+     * (first turn, then the rest) so bad taps can fit after the first tap.
+     */
+    List<Action> base(List<Integer> road, List<Integer> need, int[] turns, int tapDir, boolean fromGold) {
         List<Action> base = new ArrayList<>();
-        for (int idx : order(road, need)) base.add(new Action(idx, taps(turns[idx], tapDir), "tile"));
+        for (int idx : order(road, need, fromGold)) base.add(new Action(idx, taps(turns[idx], tapDir), "tile"));
+        if (on() && base.size() == 1 && base.get(0).taps >= 2) {
+            Action a = base.get(0);
+            base.add(new Action(a.cell, a.taps - 1, "tile"));
+            a.taps = 1;
+        }
         return base;
+    }
+
+    /** A block for the rare stray first tap: off the route (road tile or grass), not a start tile. */
+    int pickStray(Board b, Set<Integer> roadSet, List<Integer> road, List<Integer> need) {
+        List<Integer> cands = new ArrayList<>();
+        for (int i = 0; i < b.masks.length; i++) {
+            if (i == b.srcR * b.cols + b.srcC || i == b.dstR * b.cols + b.dstC) continue;
+            if (roadSet.contains(i)) continue;
+            cands.add(i);
+        }
+        return cands.isEmpty() ? -1 : cands.get(rnd.nextInt(cands.size()));
     }
 
     static List<Action> copy(List<Action> p) {
@@ -351,7 +396,7 @@ public class Humanizer {
         return cands.get(cands.size() - 1);
     }
 
-    /** Insertion index right after the planned tile nearest to {@code cell} (70%), else anywhere before the end. */
+    /** Insertion index right after the planned tile nearest to {@code cell} (70%), else anywhere after the first tap and before the end. */
     int insertNear(Board b, List<Action> p, int cell, int last) {
         if (rnd.nextInt(100) < 70) {
             int best = -1;
@@ -362,7 +407,7 @@ public class Humanizer {
             }
             if (best >= 0) return best + 1;
         }
-        return rnd.nextInt(last + 1);
+        return 1 + rnd.nextInt(Math.max(1, last));   // never before the first tap
     }
 
     static double minDist(Board b, int cell, List<Action> p) {

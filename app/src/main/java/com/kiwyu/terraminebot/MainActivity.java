@@ -82,6 +82,10 @@ public class MainActivity extends Activity {
         num("thinkMaxMs", "Pause before solving, max ms", cfg.thinkMaxMs);
         num("reactMinMs", "Pause before tapping replay, min ms", cfg.reactMinMs);
         num("reactMaxMs", "Pause before tapping replay, max ms", cfg.reactMaxMs);
+        num("startLepPct", "Start at the tile by the leprechaun, % of rounds", cfg.startLepPct);
+        num("startPotPct", "Start at the tile by the gold, % of rounds", cfg.startPotPct);
+        note("The rest of the rounds open with a stray tap on another block (counts as a bad tap). " +
+                "After the first tap the bot works along the road from that end.");
         num("perfectRoundPct", "Rounds with no bad taps, %", cfg.perfectRoundPct);
         num("badTapsMin", "Bad taps per round, min", cfg.badTapsMin);
         num("badTapsMax", "Bad taps per round, max", cfg.badTapsMax);
@@ -147,6 +151,7 @@ public class MainActivity extends Activity {
             cfg.hesitationPct = i("hesitationPct"); cfg.distractionPct = i("distractionPct");
             cfg.thinkMinMs = i("thinkMinMs"); cfg.thinkMaxMs = i("thinkMaxMs");
             cfg.reactMinMs = i("reactMinMs"); cfg.reactMaxMs = i("reactMaxMs");
+            cfg.startLepPct = i("startLepPct"); cfg.startPotPct = i("startPotPct");
             cfg.perfectRoundPct = i("perfectRoundPct");
             cfg.badTapsMin = i("badTapsMin"); cfg.badTapsMax = i("badTapsMax");
             cfg.tapsLeftMargin = i("tapsLeftMargin");
