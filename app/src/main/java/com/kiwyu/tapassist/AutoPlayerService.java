@@ -1,4 +1,4 @@
-package com.kiwyu.terraminebot;
+package com.kiwyu.tapassist;
 
 import android.accessibilityservice.AccessibilityService;
 import android.accessibilityservice.GestureDescription;

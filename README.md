@@ -1,4 +1,4 @@
-# TerraMine Bot
+# Tap Assist (TerraMine Gold Rush test bot)
 
 Android auto-player for the **TerraMine → Gold Rush** pipe puzzle. It uses an
 AccessibilityService that takes screenshots and taps, with a floating ▶/⚙ panel to start and stop it.
@@ -18,15 +18,15 @@ All measurements are proportional to the screen and board size.
 
 ## Install
 
-1. Copy `dist/TerraMineBot-0.7.apk` to the phone and install it (allow installs from that app when asked).
-2. Open **TerraMine Bot** → **App info** → ⋮ → **Allow restricted settings**. Android 13+ requires this before a
+1. Copy `dist/TapAssist-0.8.apk` to the phone and install it (allow installs from that app when asked).
+2. Open **Tap Assist** → **App info** → ⋮ → **Allow restricted settings**. Android 13+ requires this before a
    sideloaded app can use accessibility.
-3. **Accessibility settings** → Installed apps → **TerraMine Bot** → On.
+3. **Accessibility settings** → Installed apps → **Tap Assist** → On.
 4. Open TerraMine → Gold Rush and press ▶ on the floating panel (bottom-right, over the game's Settings tab).
 
 ⚙ → **Check board now** shows what the bot reads: the tile grid (`LEP`/`POT`/openings), the tap count
 for the road, the replay button position and the X detector score. **Save debug snapshot**, or the
-"Save debug images" setting, writes raw and annotated screenshots to `Pictures/TerraMineBot`.
+"Save debug images" setting, writes raw and annotated screenshots to `Pictures/TapAssist`.
 
 ## Humanize mode (anti-cheat testing)
 
@@ -54,7 +54,7 @@ The bot also takes breaks every 8–25 rounds (45 s–5 min), and its screen pol
 With humanize off, taps are exact tile centres, 40 ms long, at fixed intervals, in row order, with no mistakes.
 That's the "obvious bot" baseline.
 
-**Log every tap** writes `Download/TerraMineBot/taps_<time>.csv` when the bot stops
+**Log every tap** writes `Download/TapAssist/taps_<time>.csv` when the bot stops
 (`epoch_ms,x,y,press_ms,drift_x,drift_y,kind,detail`; kind is `tile`, `overshoot`, `bounce`,
 `correction`, `wrong_tile`, `grass`, `revisit`, `replay` or `ad_close`), so you can line it up with your anti-cheat telemetry.
 

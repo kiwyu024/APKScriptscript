@@ -1,4 +1,4 @@
-package com.kiwyu.terraminebot;
+package com.kiwyu.tapassist;
 
 import android.app.Activity;
 import android.content.Intent;
@@ -30,12 +30,12 @@ public class MainActivity extends Activity {
     static final String HELP =
             "Setup (one time):\n" +
             "1. Tap 'App info', then ⋮ (top right) → 'Allow restricted settings' (Android 13+ requires this for sideloaded apps).\n" +
-            "2. Tap 'Accessibility settings' → Installed apps → TerraMine Bot → On.\n" +
+            "2. Tap 'Accessibility settings' → Installed apps → Tap Assist → On.\n" +
             "3. A floating ▶ ⚙ panel appears at the bottom-right (over the game's Settings tab). Leave it there: " +
             "it must not cover the board, Play Again / Watch Ad, Exit or the ad's X.\n" +
-            "4. Open TerraMine → Gold Rush, then press ▶.\n\n" +
+            "4. Open the game's puzzle, then press ▶.\n\n" +
             "The board, leprechaun, pot and buttons are found automatically. ⚙ → 'Check board now' shows what the bot reads. " +
-            "If something goes wrong, turn on 'Save debug images' (or ⚙ → Save debug snapshot); images go to Pictures/TerraMineBot.";
+            "If something goes wrong, turn on 'Save debug images' (or ⚙ → Save debug snapshot); images go to Pictures/TapAssist.";
 
     @Override
     protected void onCreate(Bundle b) {
@@ -49,7 +49,7 @@ public class MainActivity extends Activity {
         sv.addView(col);
         setContentView(sv);
 
-        title("TerraMine Bot");
+        title("Tap Assist");
         serviceState = new TextView(this);
         col.addView(serviceState);
         button("Accessibility settings", () -> startActivity(new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)));
@@ -98,7 +98,7 @@ public class MainActivity extends Activity {
         num("breakEveryMax", "Break every N rounds, max", cfg.breakEveryMax);
         num("breakMinSec", "Break length, min seconds", cfg.breakMinSec);
         num("breakMaxSec", "Break length, max seconds", cfg.breakMaxSec);
-        logTaps = check("Log every tap to Download/TerraMineBot (CSV, saved on stop)", cfg.logTaps);
+        logTaps = check("Log every tap to Download/TapAssist (CSV, saved on stop)", cfg.logTaps);
 
         title("Replay");
         text("playTexts", "Replay button texts (comma separated)", cfg.playTexts);

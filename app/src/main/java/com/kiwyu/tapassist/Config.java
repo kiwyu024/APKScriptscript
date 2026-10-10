@@ -1,11 +1,11 @@
-package com.kiwyu.terraminebot;
+package com.kiwyu.tapassist;
 
 import android.content.Context;
 import android.content.SharedPreferences;
 
 /** All tunable settings, persisted in SharedPreferences. */
 public class Config {
-    public static final String PREFS = "terraminebot";
+    public static final String PREFS = "tapassist";
 
     public int rows = 6, cols = 6;
     // Optional manual grid (centres of the top-left and bottom-right tiles), used only when the

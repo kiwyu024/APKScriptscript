@@ -1,4 +1,4 @@
-package com.kiwyu.terraminebot;
+package com.kiwyu.tapassist;
 
 import android.content.ContentValues;
 import android.content.Context;
@@ -15,19 +15,19 @@ import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.Locale;
 
-/** Saves the raw screenshot and an annotated copy (detected roads, scores) to Pictures/TerraMineBot. */
+/** Saves the raw screenshot and an annotated copy (detected roads, scores) to Pictures/TapAssist. */
 public class DebugDump {
     public static String save(Context ctx, Frame f, Board b, String note) {
         String stamp = new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(new Date());
         try {
-            write(ctx, f.bitmap, "tm_" + stamp + "_raw.png");
+            write(ctx, f.bitmap, "shot_" + stamp + "_raw.png");
             if (b != null && b.masks != null) {
                 Bitmap ann = f.bitmap.copy(Bitmap.Config.ARGB_8888, true);
                 annotate(new Canvas(ann), b, note);
-                write(ctx, ann, "tm_" + stamp + "_annotated.png");
+                write(ctx, ann, "shot_" + stamp + "_annotated.png");
                 ann.recycle();
             }
-            return "Pictures/TerraMineBot/tm_" + stamp;
+            return "Pictures/TapAssist/shot_" + stamp;
         } catch (Exception e) {
             return "save failed: " + e.getMessage();
         }
@@ -61,7 +61,7 @@ public class DebugDump {
         ContentValues v = new ContentValues();
         v.put(MediaStore.Images.Media.DISPLAY_NAME, name);
         v.put(MediaStore.Images.Media.MIME_TYPE, "image/png");
-        v.put(MediaStore.Images.Media.RELATIVE_PATH, Environment.DIRECTORY_PICTURES + "/TerraMineBot");
+        v.put(MediaStore.Images.Media.RELATIVE_PATH, Environment.DIRECTORY_PICTURES + "/TapAssist");
         Uri uri = ctx.getContentResolver().insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, v);
         if (uri == null) throw new IllegalStateException("MediaStore insert failed");
         try (OutputStream os = ctx.getContentResolver().openOutputStream(uri)) {

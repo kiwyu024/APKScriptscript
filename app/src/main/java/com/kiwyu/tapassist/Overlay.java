@@ -1,4 +1,4 @@
-package com.kiwyu.terraminebot;
+package com.kiwyu.tapassist;
 
 import android.content.Intent;
 import android.graphics.Color;

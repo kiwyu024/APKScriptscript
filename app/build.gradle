@@ -1,14 +1,14 @@
 plugins { id 'com.android.application' }
 
 android {
-    namespace 'com.kiwyu.terraminebot'
+    namespace 'com.kiwyu.tapassist'
     compileSdk 35
     defaultConfig {
-        applicationId 'com.kiwyu.terraminebot'
+        applicationId 'com.kiwyu.tapassist'
         minSdk 30          // AccessibilityService.takeScreenshot needs API 30
         targetSdk 35
-        versionCode 7
-        versionName '0.7'
+        versionCode 8
+        versionName '0.8'
     }
     buildTypes {
         release {

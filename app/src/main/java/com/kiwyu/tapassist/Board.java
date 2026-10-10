@@ -1,4 +1,4 @@
-package com.kiwyu.terraminebot;
+package com.kiwyu.tapassist;
 
 /** Geometry of the puzzle board on screen plus what was read from it. */
 public class Board {

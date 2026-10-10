@@ -1,4 +1,4 @@
-package com.kiwyu.terraminebot;
+package com.kiwyu.tapassist;
 
 import java.security.SecureRandom;
 import java.util.ArrayList;

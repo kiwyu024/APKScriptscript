@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">TerraMine Bot</string>
-    <string name="service_label">TerraMine Gold Rush auto-player</string>
-    <string name="service_description">Takes screenshots of the game, solves the Gold Rush pipe puzzle, taps tiles, taps Play Again and closes ads. Shows a floating start/stop button while enabled.</string>
+    <string name="app_name">Tap Assist</string>
+    <string name="service_label">Tap Assist</string>
+    <string name="service_description">Automates play in a tile puzzle game: reads the screen with screenshots and performs taps for you. Shows a floating start/stop button while enabled.</string>
 </resources>

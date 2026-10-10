@@ -1,4 +1,4 @@
-package com.kiwyu.terraminebot;
+package com.kiwyu.tapassist;
 
 import android.accessibilityservice.AccessibilityService;
 import android.graphics.Rect;
@@ -55,7 +55,7 @@ public class GameLoop implements Runnable {
 
     void start() {
         running = true;
-        thread = new Thread(this, "TerraMineLoop");
+        thread = new Thread(this, "TapLoop");
         thread.start();
     }
 
@@ -168,7 +168,7 @@ public class GameLoop implements Runnable {
                 return;
             }
         }
-        svc.status("Waiting for the Gold Rush puzzle…");
+        svc.status("Waiting for the puzzle…");
     }
 
     /** Sleeps in 1 s steps with a countdown; false if stopped meanwhile. */
