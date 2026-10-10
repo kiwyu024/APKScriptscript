@@ -12,8 +12,8 @@ public class Config {
     // yellow board frame can't be found automatically. -1 = not set.
     public int tlX = -1, tlY = -1, brX = -1, brY = -1;
 
-    /** 1 = a tap rotates clockwise (what the recordings show), -1 = counter-clockwise, 0 = learn with one tap. */
-    public int tapDir = 1;
+    /** Taps always turn a tile clockwise in this game (seen in every recording); kept as a constant for the solver. */
+    public final int tapDir = 1;
 
     public int edgeThreshold = 60;   // stripe brightness needed to call a tile side "open"
     public int xThreshold = 20;      // ad close-X detector score needed to tap it
@@ -63,7 +63,6 @@ public class Config {
         k.cols = p.getInt("cols", k.cols);
         k.tlX = p.getInt("tlX", -1); k.tlY = p.getInt("tlY", -1);
         k.brX = p.getInt("brX", -1); k.brY = p.getInt("brY", -1);
-        k.tapDir = p.getInt("tapDir", k.tapDir);
         k.edgeThreshold = p.getInt("edgeThreshold", k.edgeThreshold);
         k.xThreshold = p.getInt("xThreshold", k.xThreshold);
         k.tapDelayMs = p.getInt("tapDelayMs", k.tapDelayMs);
@@ -101,7 +100,6 @@ public class Config {
         c.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
                 .putInt("rows", rows).putInt("cols", cols)
                 .putInt("tlX", tlX).putInt("tlY", tlY).putInt("brX", brX).putInt("brY", brY)
-                .putInt("tapDir", tapDir)
                 .putInt("edgeThreshold", edgeThreshold).putInt("xThreshold", xThreshold)
                 .putInt("tapDelayMs", tapDelayMs).putInt("settleMs", settleMs).putInt("loopMs", loopMs)
                 .putString("playTexts", playTexts).putInt("replayGapSec", replayGapSec)

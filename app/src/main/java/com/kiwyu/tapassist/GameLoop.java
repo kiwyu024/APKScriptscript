@@ -331,7 +331,6 @@ public class GameLoop implements Runnable {
             DebugDump.save(svc, f, board, "read");
             dumped = true;
         }
-        if (cfg.tapDir == 0 && !learnTapDirection(board)) return;
 
         Solver solver = new Solver(board, cfg.tapDir);
         int[] turns = solver.solve();
@@ -433,29 +432,5 @@ public class GameLoop implements Runnable {
         solvedWaiting = true;
         solvedAt = System.currentTimeMillis();
         svc.status("Solved! (" + solvedCount + " total)");
-    }
-
-    /** Taps one asymmetric road tile once and sees which way it turned. */
-    boolean learnTapDirection(Board board) {
-        int idx = -1;
-        for (int i = 0; i < board.masks.length; i++) {
-            int m = board.masks[i];
-            if (m != 0 && m != 15 && m != 5 && m != 10) { idx = i; break; }
-        }
-        if (idx < 0) { cfg.tapDir = 1; cfg.save(svc); return true; }
-        int r = idx / board.cols, c = idx % board.cols, before = board.masks[idx];
-        svc.status("Learning tap direction…");
-        tap(board.cx(c), board.cy(r), board.pitchX / 2f, board.pitchY / 2f, "tile", "learn_direction");
-        AutoPlayerService.sleep(cfg.settleMs);
-        Frame f2 = lastBoardRect != null && intersectsPanel() ? svc.screenshotWithoutPanel() : svc.screenshot();
-        if (f2 == null) return false;
-        Vision.read(f2, board, cfg);
-        int after = board.masks[idx];
-        if (after == Solver.rotCw(before)) cfg.tapDir = 1;
-        else if (after == Solver.rotCcw(before)) cfg.tapDir = -1;
-        else return false;   // try again next tick
-        cfg.save(svc);
-        svc.status("Tap rotates " + (cfg.tapDir > 0 ? "clockwise" : "counter-clockwise"));
-        return false;        // re-read the board next tick
     }
 }

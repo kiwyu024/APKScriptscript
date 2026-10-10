@@ -6,13 +6,11 @@ import android.net.Uri;
 import android.os.Bundle;
 import android.provider.Settings;
 import android.text.InputType;
-import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.CheckBox;
 import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
-import android.widget.Spinner;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -24,7 +22,6 @@ public class MainActivity extends Activity {
     LinearLayout col;
     TextView serviceState;
     final Map<String, EditText> fields = new LinkedHashMap<>();
-    Spinner dir;
     CheckBox back, debug, humanize, logTaps, handleAds, takeBreaks;
 
     static final String HELP =
@@ -61,8 +58,6 @@ public class MainActivity extends Activity {
         col.addView(help);
 
         title("Puzzle");
-        dir = spinner("Tap rotates", new String[]{"clockwise", "counter-clockwise", "learn (uses 1 tap)"},
-                cfg.tapDir > 0 ? "clockwise" : cfg.tapDir < 0 ? "counter-clockwise" : "learn (uses 1 tap)");
         num("edgeThreshold", "Road detection threshold (default 60)", cfg.edgeThreshold);
         num("tapDelayMs", "Delay between taps, ms", cfg.tapDelayMs);
         num("settleMs", "Wait after tapping, ms", cfg.settleMs);
@@ -134,8 +129,6 @@ public class MainActivity extends Activity {
 
     void save() {
         try {
-            int d = dir.getSelectedItemPosition();
-            cfg.tapDir = d == 0 ? 1 : d == 1 ? -1 : 0;
             cfg.edgeThreshold = i("edgeThreshold");
             cfg.tapDelayMs = i("tapDelayMs"); cfg.settleMs = i("settleMs"); cfg.loopMs = i("loopMs");
             cfg.playTexts = fields.get("playTexts").getText().toString();
@@ -214,17 +207,6 @@ public class MainActivity extends Activity {
     }
 
     void text(String k, String l, String v) { field(k, l, v, InputType.TYPE_CLASS_TEXT); }
-
-    Spinner spinner(String label, String[] items, String sel) {
-        TextView l = new TextView(this);
-        l.setText(label);
-        col.addView(l);
-        Spinner s = new Spinner(this);
-        s.setAdapter(new ArrayAdapter<>(this, android.R.layout.simple_spinner_dropdown_item, items));
-        for (int i = 0; i < items.length; i++) if (items[i].equals(sel)) s.setSelection(i);
-        col.addView(s);
-        return s;
-    }
 
     CheckBox check(String t, boolean v) {
         CheckBox c = new CheckBox(this);
