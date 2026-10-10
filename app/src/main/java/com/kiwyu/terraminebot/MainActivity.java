@@ -1,0 +1,186 @@
+package com.kiwyu.terraminebot;
+
+import android.app.Activity;
+import android.content.Intent;
+import android.net.Uri;
+import android.os.Bundle;
+import android.provider.Settings;
+import android.text.InputType;
+import android.widget.ArrayAdapter;
+import android.widget.Button;
+import android.widget.CheckBox;
+import android.widget.EditText;
+import android.widget.LinearLayout;
+import android.widget.ScrollView;
+import android.widget.Spinner;
+import android.widget.TextView;
+import android.widget.Toast;
+
+import java.util.LinkedHashMap;
+import java.util.Map;
+
+public class MainActivity extends Activity {
+    Config cfg;
+    LinearLayout col;
+    TextView serviceState;
+    final Map<String, EditText> fields = new LinkedHashMap<>();
+    Spinner dir;
+    CheckBox back, debug;
+
+    static final String HELP =
+            "Setup (one time):\n" +
+            "1. Tap 'App info', then ⋮ (top right) → 'Allow restricted settings' (Android 13+ requires this for sideloaded apps).\n" +
+            "2. Tap 'Accessibility settings' → Installed apps → TerraMine Bot → On.\n" +
+            "3. A floating ▶ ⚙ panel appears at the bottom-right (over the game's Settings tab). Leave it there: " +
+            "it must not cover the board, Play Again / Watch Ad, Exit or the ad's X.\n" +
+            "4. Open TerraMine → Gold Rush, then press ▶.\n\n" +
+            "The board, leprechaun, pot and buttons are found automatically. ⚙ → 'Check board now' shows what the bot reads. " +
+            "If something goes wrong, turn on 'Save debug images' (or ⚙ → Save debug snapshot); images go to Pictures/TerraMineBot.";
+
+    @Override
+    protected void onCreate(Bundle b) {
+        super.onCreate(b);
+        cfg = Config.load(this);
+        ScrollView sv = new ScrollView(this);
+        col = new LinearLayout(this);
+        col.setOrientation(LinearLayout.VERTICAL);
+        int pad = (int) (16 * getResources().getDisplayMetrics().density);
+        col.setPadding(pad, pad * 2, pad, pad * 2);
+        sv.addView(col);
+        setContentView(sv);
+
+        title("TerraMine Bot");
+        serviceState = new TextView(this);
+        col.addView(serviceState);
+        button("Accessibility settings", () -> startActivity(new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)));
+        button("App info (allow restricted settings)", () -> startActivity(
+                new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:" + getPackageName()))));
+        TextView help = new TextView(this);
+        help.setText(HELP);
+        help.setPadding(0, pad / 2, 0, pad / 2);
+        col.addView(help);
+
+        title("Puzzle");
+        dir = spinner("Tap rotates", new String[]{"clockwise", "counter-clockwise", "learn (uses 1 tap)"},
+                cfg.tapDir > 0 ? "clockwise" : cfg.tapDir < 0 ? "counter-clockwise" : "learn (uses 1 tap)");
+        num("edgeThreshold", "Road detection threshold (default 60)", cfg.edgeThreshold);
+        num("tapDelayMs", "Delay between taps, ms", cfg.tapDelayMs);
+        num("settleMs", "Wait after tapping, ms", cfg.settleMs);
+        num("loopMs", "Loop interval, ms", cfg.loopMs);
+
+        title("Replay");
+        text("playTexts", "Replay button texts (comma separated)", cfg.playTexts);
+        num("replayGapSec", "Min seconds between replay taps", cfg.replayGapSec);
+
+        title("Ads");
+        num("xThreshold", "Close-X detection threshold (default 20)", cfg.xThreshold);
+        num("adTimeoutSec", "If no X after this many seconds, tap corners / Back", cfg.adTimeoutSec);
+        text("adClosePoints", "Extra X spots to try (x,y;x,y)", cfg.adClosePoints);
+        back = check("Press Back if the ad can't be closed", cfg.backAsLastResort);
+        debug = check("Save debug images while running", cfg.debugDump);
+
+        button("Save", this::save);
+        button("Clear manual grid", () -> {
+            cfg.tlX = cfg.tlY = cfg.brX = cfg.brY = -1;
+            cfg.save(this);
+            Toast.makeText(this, "Manual grid cleared", Toast.LENGTH_SHORT).show();
+        });
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        serviceState.setText(AutoPlayerService.instance != null
+                ? "Service: ON — use the floating panel"
+                : "Service: OFF — enable it in Accessibility settings");
+        Config c = Config.load(this);
+        if (c.manualGrid())
+            serviceState.append("\nManual grid set: (" + c.tlX + "," + c.tlY + ") → (" + c.brX + "," + c.brY + ")");
+    }
+
+    void save() {
+        try {
+            int d = dir.getSelectedItemPosition();
+            cfg.tapDir = d == 0 ? 1 : d == 1 ? -1 : 0;
+            cfg.edgeThreshold = i("edgeThreshold");
+            cfg.tapDelayMs = i("tapDelayMs"); cfg.settleMs = i("settleMs"); cfg.loopMs = i("loopMs");
+            cfg.playTexts = fields.get("playTexts").getText().toString();
+            cfg.replayGapSec = i("replayGapSec");
+            cfg.xThreshold = i("xThreshold");
+            cfg.adTimeoutSec = i("adTimeoutSec");
+            cfg.adClosePoints = fields.get("adClosePoints").getText().toString().trim();
+            cfg.backAsLastResort = back.isChecked();
+            cfg.debugDump = debug.isChecked();
+            cfg.save(this);
+            Toast.makeText(this, "Saved — restart the bot (■ then ▶) to apply", Toast.LENGTH_LONG).show();
+        } catch (NumberFormatException e) {
+            Toast.makeText(this, "Invalid number: " + e.getMessage(), Toast.LENGTH_LONG).show();
+        }
+    }
+
+    int i(String k) { return Integer.parseInt(fields.get(k).getText().toString().trim()); }
+
+    void title(String t) {
+        TextView v = new TextView(this);
+        v.setText(t);
+        v.setTextSize(20);
+        v.setPadding(0, 24, 0, 8);
+        col.addView(v);
+    }
+
+    void note(String t) {
+        TextView v = new TextView(this);
+        v.setText(t);
+        v.setTextSize(12);
+        col.addView(v);
+    }
+
+    void button(String t, Runnable r) {
+        Button b = new Button(this);
+        b.setText(t);
+        b.setAllCaps(false);
+        b.setOnClickListener(v -> r.run());
+        col.addView(b);
+    }
+
+    EditText field(String key, String label, String value, int type) {
+        TextView l = new TextView(this);
+        l.setText(label);
+        col.addView(l);
+        EditText e = new EditText(this);
+        e.setInputType(type);
+        e.setText(value);
+        col.addView(e);
+        fields.put(key, e);
+        return e;
+    }
+
+    void num(String k, String l, int v) {
+        field(k, l, String.valueOf(v), InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_FLAG_SIGNED);
+    }
+
+    void dec(String k, String l, float v) {
+        field(k, l, String.valueOf(v), InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_FLAG_DECIMAL);
+    }
+
+    void text(String k, String l, String v) { field(k, l, v, InputType.TYPE_CLASS_TEXT); }
+
+    Spinner spinner(String label, String[] items, String sel) {
+        TextView l = new TextView(this);
+        l.setText(label);
+        col.addView(l);
+        Spinner s = new Spinner(this);
+        s.setAdapter(new ArrayAdapter<>(this, android.R.layout.simple_spinner_dropdown_item, items));
+        for (int i = 0; i < items.length; i++) if (items[i].equals(sel)) s.setSelection(i);
+        col.addView(s);
+        return s;
+    }
+
+    CheckBox check(String t, boolean v) {
+        CheckBox c = new CheckBox(this);
+        c.setText(t);
+        c.setChecked(v);
+        col.addView(c);
+        return c;
+    }
+}
