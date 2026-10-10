@@ -27,7 +27,7 @@ public class DebugDump {
                 write(ctx, ann, "shot_" + stamp + "_annotated.png");
                 ann.recycle();
             }
-            return "Pictures/TapAssist/shot_" + stamp;
+            return "Pictures/" + ctx.getString(R.string.files_folder) + "/shot_" + stamp;
         } catch (Exception e) {
             return "save failed: " + e.getMessage();
         }
@@ -61,7 +61,7 @@ public class DebugDump {
         ContentValues v = new ContentValues();
         v.put(MediaStore.Images.Media.DISPLAY_NAME, name);
         v.put(MediaStore.Images.Media.MIME_TYPE, "image/png");
-        v.put(MediaStore.Images.Media.RELATIVE_PATH, Environment.DIRECTORY_PICTURES + "/TapAssist");
+        v.put(MediaStore.Images.Media.RELATIVE_PATH, Environment.DIRECTORY_PICTURES + "/" + ctx.getString(R.string.files_folder));
         Uri uri = ctx.getContentResolver().insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, v);
         if (uri == null) throw new IllegalStateException("MediaStore insert failed");
         try (OutputStream os = ctx.getContentResolver().openOutputStream(uri)) {

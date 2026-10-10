@@ -13,7 +13,7 @@ import java.util.List;
  *   Play Again / Watch Ad -> tap it (never Exit)
  *   puzzle showing        -> read tiles, find the road leprechaun -> pot, tap tiles
  */
-public class GameLoop implements Runnable {
+public class GameLoop implements Runnable, BotLoop {
     final AutoPlayerService svc;
     final Config cfg;
     final Humanizer human;
@@ -23,9 +23,9 @@ public class GameLoop implements Runnable {
 
     long lastReplayTap = 0;
     long expectAdUntil = 0;
-    long adStart = 0, adEndedAt = 0, lastAdTap = 0;
-    int adFallbackTries = 0;
-    long unknownSince = 0;
+    long adEndedAt = 0;
+    final Toucher touch;
+    final AdHandler ads;
     Rect lastBoardRect;        // where the board was last seen (to keep the panel out of screenshots)
     int spawnR = -1, spawnC = -1;   // leprechaun cell of the puzzle being solved
     int unsolvedStreak = 0;
@@ -38,31 +38,27 @@ public class GameLoop implements Runnable {
     int solvedCount = 0;
     boolean dumped = false;
 
-    static final String[] CLOSE_LABELS = {"close", "close ad", "close advertisement", "skip", "skip ad",
-            "skip video", "×", "✕", "✖", "dismiss"};
-
     public GameLoop(AutoPlayerService svc, Config cfg) {
         this.svc = svc;
         this.cfg = cfg;
         this.human = new Humanizer(cfg);
+        this.touch = new Toucher(svc, cfg, human, log);
+        this.ads = new AdHandler(svc, cfg, human, log, touch);
     }
 
-    /** One tap through the humanizer, recorded in the tap log. Box = half-size of the target. */
     void tap(int cx, int cy, float hw, float hh, String kind, String detail) {
-        int[] p = human.point(cx, cy, hw, hh);
-        int press = human.pressMs();
-        int[] d = human.drift();
-        svc.tap(p[0], p[1], press, d[0], d[1]);
-        if (cfg.logTaps) log.add(p[0], p[1], press, d, kind, detail);
+        touch.tap(cx, cy, hw, hh, kind, detail);
     }
 
-    void start() {
+    @Override public boolean isRunning() { return running; }
+
+    @Override public void start() {
         running = true;
         thread = new Thread(this, "TapLoop");
         thread.start();
     }
 
-    void stop() {
+    @Override public void stop() {
         running = false;
         if (thread != null) thread.interrupt();
     }
@@ -75,6 +71,7 @@ public class GameLoop implements Runnable {
             catch (Exception e) { svc.status("Error: " + e.getClass().getSimpleName() + " " + e.getMessage()); }
             AutoPlayerService.sleep(human.loopDelay());
         }
+        ads.finish(System.currentTimeMillis());
         String saved = cfg.logTaps ? log.save(svc) : null;
         svc.status("Stopped (solved " + solvedCount + ")" + (saved == null ? "" : "\nTap log: " + saved));
     }
@@ -83,7 +80,7 @@ public class GameLoop implements Runnable {
         long now = System.currentTimeMillis();
 
         // A stray tap on an ad opened the Play Store / a browser: go back.
-        if (cfg.handleAds && isOutsideApp(svc.fgPackage) && (adStart > 0 || now < expectAdUntil + 60000)) {
+        if (cfg.handleAds && ads.active && ads.stage != 2 && isOutsideApp(svc.fgPackage)) {
             svc.status("Ad opened " + svc.fgPackage + " — going back");
             svc.performGlobalAction(AccessibilityService.GLOBAL_ACTION_BACK);
             AutoPlayerService.sleep(1500);
@@ -116,21 +113,22 @@ public class GameLoop implements Runnable {
         boolean adFg = svc.adInForeground();
         int[] replay = adFg || inPlay ? null : findReplay(f, board);
 
-        if (adFg || (board == null && replay == null && (now < expectAdUntil || adStart > 0))) {
-            handleAd(f, now, adFg);
+        if (adFg || ads.busy(now) || (board == null && replay == null && now < expectAdUntil)) {
+            if (cfg.handleAds) ads.tick(f, now, adFg);
+            else svc.status("Ad showing — ad automation is off");
             return;
         }
-        if (adStart > 0) { adStart = 0; adEndedAt = now; adFallbackTries = 0; }
+        if (ads.active) { ads.finish(now); adEndedAt = now; }
 
         if (replay != null) {
-            unknownSince = 0;
             long since = now - Math.max(lastReplayTap, adEndedAt);
             if (since < cfg.replayGapSec * 1000L) {
                 svc.status("Result screen — waiting " + (cfg.replayGapSec - since / 1000) + "s");
                 return;
             }
-            if (replay[4] == 1 && !cfg.handleAds) {
-                svc.status("'Watch Ad' screen — ad automation is off, tap it yourself");
+            if (replay[4] == 1 && (!cfg.handleAds || ads.blockedThisSession)) {
+                svc.status(ads.blockedThisSession ? "'Watch Ad' screen — real ads seen, tap it yourself"
+                        : "'Watch Ad' screen — ad automation is off, tap it yourself");
                 return;
             }
             long brk = human.breakDue();
@@ -150,7 +148,6 @@ public class GameLoop implements Runnable {
         }
 
         if (board != null) {
-            unknownSince = 0;
             if (solvedWaiting && now - solvedAt < 25000) {
                 // if the same puzzle is clearly still unsolved, the "solved" call was wrong
                 boolean sameSpawn = board.srcR == spawnR && board.srcC == spawnC;
@@ -178,17 +175,6 @@ public class GameLoop implements Runnable {
             return;
         }
 
-        // Unknown screen: if an X sits in a top corner for a while, it's probably an ad we didn't recognise.
-        if (unknownSince == 0) unknownSince = now;
-        if (cfg.handleAds && now - unknownSince > 6000) {
-            int[] x = Vision.findCloseX(f);
-            if (x[0] >= cfg.xThreshold * 2 && now - lastAdTap > 2000) {
-                svc.status("Unknown screen with an X — tapping it");
-                tap(x[1], x[2], 4, 4, "ad_close", "unknown_screen");
-                lastAdTap = now;
-                return;
-            }
-        }
         svc.status("Waiting for the puzzle…");
     }
 
@@ -247,66 +233,6 @@ public class GameLoop implements Runnable {
         // match is only trusted below a visible board — this keeps yellow/orange ads from matching.
         if (board == null) return null;
         return Vision.findReplayButton(f, Math.max(Math.round(f.h * 0.5f), board.top + board.size + 4));
-    }
-
-    // -------------------------------------------------------------------- ads
-    void handleAd(Frame f, long now, boolean adFg) {
-        if (adStart == 0) adStart = now;
-        if (!cfg.handleAds) {
-            svc.status("Ad showing — ad automation is off");
-            return;
-        }
-        long secs = (now - adStart) / 1000;
-        if (now - lastAdTap < 1500) return;
-
-        int[] x = Vision.findCloseX(f);
-        if (x[0] >= cfg.xThreshold) {
-            svc.status("Ad: closing X at " + x[1] + "," + x[2] + " (" + secs + "s)");
-            tap(x[1], x[2], 4, 4, "ad_close", "x_detected");
-            lastAdTap = System.currentTimeMillis();
-            return;
-        }
-
-        if (secs > 40) {
-            AccessibilityNodeInfo best = null;
-            int bestScore = Integer.MAX_VALUE;
-            for (AccessibilityNodeInfo n : svc.findNodes(CLOSE_LABELS, true)) {
-                Rect b = new Rect();
-                n.getBoundsInScreen(b);
-                if (b.isEmpty()) continue;
-                int score = b.centerY() + Math.min(b.centerX(), f.w - b.centerX());
-                if (score < bestScore) { bestScore = score; best = n; }
-            }
-            if (best != null) {
-                svc.status("Ad: clicking close button (" + secs + "s)");
-                svc.clickNode(best);
-                lastAdTap = System.currentTimeMillis();
-                return;
-            }
-        }
-
-        if (secs > cfg.adTimeoutSec) {
-            int[][] cal = cfg.closePoints();
-            int[][] defaults = {
-                    {Math.round(f.w * 0.942f), Math.round(f.h * 0.067f)},  // where AdMob put it in the recordings
-                    {Math.round(f.w * 0.058f), Math.round(f.h * 0.067f)},
-            };
-            int[][] all = Arrays.copyOf(cal, cal.length + defaults.length);
-            System.arraycopy(defaults, 0, all, cal.length, defaults.length);
-            if (adFallbackTries < all.length) {
-                int[] p = all[adFallbackTries++];
-                svc.status("Ad: no X found, trying " + p[0] + "," + p[1]);
-                tap(p[0], p[1], 4, 4, "ad_close", "corner_fallback");
-            } else if (cfg.backAsLastResort) {
-                svc.status("Ad: pressing Back");
-                svc.performGlobalAction(AccessibilityService.GLOBAL_ACTION_BACK);
-                adFallbackTries = 0;
-                adStart = now - (cfg.adTimeoutSec - 20) * 1000L;   // try again in ~20s
-            }
-            lastAdTap = System.currentTimeMillis();
-            return;
-        }
-        svc.status("Ad: waiting for the X (" + secs + "s)" + (adFg ? "" : " ?"));
     }
 
     // ----------------------------------------------------------------- puzzle

@@ -50,6 +50,8 @@ public class Config {
 
     /** Ads: off by default; turn on only in builds that serve AdMob test ads. */
     public boolean handleAds = false;
+    // Ad viewer mix (per ad), for testing how the game handles people skipping ads. Test ads only.
+    public int adWatchPct = 60, adImpatientPct = 25, adSkipperPct = 15;
 
     public String gamePackage = "";
     public boolean debugDump = false;
@@ -91,6 +93,9 @@ public class Config {
         k.breakMinSec = p.getInt("breakMinSec", k.breakMinSec); k.breakMaxSec = p.getInt("breakMaxSec", k.breakMaxSec);
         k.logTaps = p.getBoolean("logTaps", k.logTaps);
         k.handleAds = p.getBoolean("handleAds", k.handleAds);
+        k.adWatchPct = p.getInt("adWatchPct", k.adWatchPct);
+        k.adImpatientPct = p.getInt("adImpatientPct", k.adImpatientPct);
+        k.adSkipperPct = p.getInt("adSkipperPct", k.adSkipperPct);
         k.gamePackage = p.getString("gamePackage", "");
         k.debugDump = p.getBoolean("debugDump", false);
         return k;
@@ -119,6 +124,8 @@ public class Config {
                 .putInt("breakEveryMin", breakEveryMin).putInt("breakEveryMax", breakEveryMax)
                 .putInt("breakMinSec", breakMinSec).putInt("breakMaxSec", breakMaxSec).putBoolean("logTaps", logTaps)
                 .putBoolean("handleAds", handleAds)
+                .putInt("adWatchPct", adWatchPct).putInt("adImpatientPct", adImpatientPct)
+                .putInt("adSkipperPct", adSkipperPct)
                 .putString("gamePackage", gamePackage)
                 .putBoolean("debugDump", debugDump)
                 .apply();

@@ -14,7 +14,7 @@ import java.util.Locale;
 
 /**
  * Records every tap the bot makes (time, position, press length, what it was for) so it can be
- * compared with what the game's anti-cheat logged. Saved as CSV in Download/TapAssist when the bot stops.
+ * compared with what the game's anti-cheat logged. Saved as CSV in Download/<app folder> when the bot stops.
  */
 public class TapLog {
     final StringBuilder sb = new StringBuilder("epoch_ms,x,y,press_ms,drift_x,drift_y,kind,detail\n");
@@ -30,6 +30,7 @@ public class TapLog {
     /** A decision the bot made (for working out what happened when something goes wrong). */
     public synchronized void event(String what) {
         sb.append(System.currentTimeMillis()).append(",,,,,,event,").append(what.replace(',', ';')).append('\n');
+        count++;
     }
 
     public synchronized String save(Context ctx) {
@@ -39,13 +40,14 @@ public class TapLog {
             ContentValues v = new ContentValues();
             v.put(MediaStore.Downloads.DISPLAY_NAME, name);
             v.put(MediaStore.Downloads.MIME_TYPE, "text/csv");
-            v.put(MediaStore.Downloads.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS + "/TapAssist");
+            String folder = ctx.getString(R.string.files_folder);
+            v.put(MediaStore.Downloads.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS + "/" + folder);
             Uri uri = ctx.getContentResolver().insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, v);
             if (uri == null) return "tap log save failed";
             try (OutputStream os = ctx.getContentResolver().openOutputStream(uri)) {
                 os.write(sb.toString().getBytes(StandardCharsets.UTF_8));
             }
-            return "Download/TapAssist/" + name + " (" + count + " taps)";
+            return "Download/" + folder + "/" + name + " (" + count + " rows)";
         } catch (Exception e) {
             return "tap log save failed: " + e.getMessage();
         }

@@ -4,11 +4,33 @@ android {
     namespace 'com.kiwyu.tapassist'
     compileSdk 35
     defaultConfig {
-        applicationId 'com.kiwyu.tapassist'
         minSdk 30          // AccessibilityService.takeScreenshot needs API 30
         targetSdk 35
-        versionCode 10
-        versionName '0.10'
+        versionCode 11
+        versionName '0.11'
+    }
+    flavorDimensions 'app'
+    productFlavors {
+        // the puzzle bot (with optional test-ad handling)
+        full {
+            dimension 'app'
+            applicationId 'com.kiwyu.tapassist'
+            resValue 'string', 'app_name', 'Tap Assist'
+            resValue 'string', 'service_label', 'Tap Assist'
+            resValue 'string', 'files_folder', 'TapAssist'
+            resValue 'string', 'service_description', 'Automates play in a tile puzzle game: reads the screen with screenshots and performs taps for you. Shows a floating start/stop button while enabled.'
+            resValue 'bool', 'ads_only', 'false'
+        }
+        // standalone ad tester: only handles ads, and only Google test ads
+        adtest {
+            dimension 'app'
+            applicationId 'com.kiwyu.adtester'
+            resValue 'string', 'app_name', 'Ad Tester'
+            resValue 'string', 'service_label', 'Ad Tester'
+            resValue 'string', 'files_folder', 'AdTester'
+            resValue 'string', 'service_description', 'For testing your own app with Google test ads: when a test ad shows, it closes or skips it the way different viewers would (watch, impatient, skipper) and logs what happened. Ads not labelled as test ads are left alone.'
+            resValue 'bool', 'ads_only', 'true'
+        }
     }
     buildTypes {
         release {
