@@ -63,7 +63,7 @@ public class Vision {
     }
 
     /**
-     * Number of tiles per side (the game uses 4x4 on early levels and 6x6 later). Tiles are separated by
+     * Number of tiles per side (4, 5, 6 or 7). Tiles are separated by
      * darker grass seams, so for each candidate n we compare brightness at the n-1 seam lines with
      * brightness at the tile middles; the right n has dark seams and bright middles.
      */
@@ -77,7 +77,7 @@ public class Vision {
             for (int y = 0; y < size; y++) rowP[y] += f.lum(left + x, top + y);
         int best = fallback;
         float bestScore = 10;   // below this the seams aren't clear; keep the default
-        for (int n = 3; n <= 8; n++) {
+        for (int n = 4; n <= 7; n++) {   // the game uses 4x4, 5x5, 6x6 and 7x7 boards
             float sc = seamScore(colP, n) + seamScore(rowP, n);
             if (sc > bestScore) { bestScore = sc; best = n; }
         }
