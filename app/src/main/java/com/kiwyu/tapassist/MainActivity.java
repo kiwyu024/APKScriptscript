@@ -25,7 +25,7 @@ public class MainActivity extends Activity {
     TextView serviceState;
     final Map<String, EditText> fields = new LinkedHashMap<>();
     Spinner dir;
-    CheckBox back, debug, humanize, logTaps, handleAds, takeBreaks;
+    CheckBox back, debug, humanize, logTaps, handleAds, takeBreaks, mistakes;
 
     static final String HELP =
             "Setup (one time):\n" +
@@ -68,6 +68,19 @@ public class MainActivity extends Activity {
         num("settleMs", "Wait after tapping, ms", cfg.settleMs);
         num("loopMs", "Loop interval, ms", cfg.loopMs);
 
+        title("Mistakes");
+        mistakes = check("Make mistakes", cfg.mistakes);
+        note("Works with or without Humanize. Each puzzle is either 'clean' (4x4: 0-2 wrong taps, bigger boards: 1-3) " +
+                "or 'messy' (4 up to 5 / 8 / 12 / 15 wrong taps on 4x4 / 5x5 / 6x6 / 7x7). The clean chance below is " +
+                "nudged down for boards that need more turns than usual. Over-rotations come on top: the right tile " +
+                "turned one step too far, then all the way round (+4 taps).");
+        num("cleanPct4", "Clean puzzles on 4x4, %", cfg.cleanPct4);
+        num("cleanPct5", "Clean puzzles on 5x5, %", cfg.cleanPct5);
+        num("cleanPct6", "Clean puzzles on 6x6, %", cfg.cleanPct6);
+        num("cleanPct7", "Clean puzzles on 7x7, %", cfg.cleanPct7);
+        num("overRotatePct", "Over-rotations, % of correct taps", cfg.overRotatePct);
+        num("tapsLeftMargin", "Keep this many of the game's 'N left' taps spare", cfg.tapsLeftMargin);
+
         title("Humanize (anti-cheat testing)");
         humanize = check("Humanize taps", cfg.humanize);
         note("Random tap spot inside each tile, press length, finger drift, pauses, tile order. " +
@@ -86,13 +99,6 @@ public class MainActivity extends Activity {
         num("startPotPct", "Start at the tile by the gold, % of rounds", cfg.startPotPct);
         note("The rest of the rounds open with a stray tap on another block (counts as a bad tap). " +
                 "After the first tap the bot works along the road from that end.");
-        num("perfectRoundPct", "Rounds with no bad taps, %", cfg.perfectRoundPct);
-        num("badTapsMin", "Bad taps per round, min", cfg.badTapsMin);
-        num("badTapsMax", "Bad taps per round, max", cfg.badTapsMax);
-        num("tapsLeftMargin", "Keep this many of the game's 'N left' taps spare", cfg.tapsLeftMargin);
-        note("Bad taps: over-rotating or double-tapping a tile and going round again (+4), tapping a road tile " +
-                "that isn't on the route (+1-3), bumping a correct tile and fixing it (+4), tapping grass (+1). " +
-                "Plus 0-2 tiles left half-turned and finished later (free). Counts lean towards the low end.");
         takeBreaks = check("Take breaks between rounds", cfg.takeBreaks);
         num("breakEveryMin", "Break every N rounds, min", cfg.breakEveryMin);
         num("breakEveryMax", "Break every N rounds, max", cfg.breakEveryMax);
@@ -152,8 +158,10 @@ public class MainActivity extends Activity {
             cfg.thinkMinMs = i("thinkMinMs"); cfg.thinkMaxMs = i("thinkMaxMs");
             cfg.reactMinMs = i("reactMinMs"); cfg.reactMaxMs = i("reactMaxMs");
             cfg.startLepPct = i("startLepPct"); cfg.startPotPct = i("startPotPct");
-            cfg.perfectRoundPct = i("perfectRoundPct");
-            cfg.badTapsMin = i("badTapsMin"); cfg.badTapsMax = i("badTapsMax");
+            cfg.mistakes = mistakes.isChecked();
+            cfg.cleanPct4 = i("cleanPct4"); cfg.cleanPct5 = i("cleanPct5");
+            cfg.cleanPct6 = i("cleanPct6"); cfg.cleanPct7 = i("cleanPct7");
+            cfg.overRotatePct = i("overRotatePct");
             cfg.tapsLeftMargin = i("tapsLeftMargin");
             cfg.takeBreaks = takeBreaks.isChecked();
             cfg.breakEveryMin = i("breakEveryMin"); cfg.breakEveryMax = i("breakEveryMax");

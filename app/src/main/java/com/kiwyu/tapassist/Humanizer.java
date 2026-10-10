@@ -179,12 +179,12 @@ public class Humanizer {
      * chosen end (next to the leprechaun, or next to the gold); after that it works along the road from that end,
      * with neighbouring tiles occasionally swapped (never the first). Humanize off: from the leprechaun end, in order.
      */
-    public List<Integer> order(List<Integer> roadOrder, List<Integer> needTaps, boolean fromGold) {
+    public List<Integer> order(List<Integer> roadOrder, List<Integer> needTaps, boolean fromGold, boolean vary) {
         List<Integer> out = new ArrayList<>();
         for (int i : roadOrder) if (needTaps.contains(i)) out.add(i);
         for (int i : needTaps) if (!out.contains(i)) out.add(i);
         if (fromGold) Collections.reverse(out);
-        if (!on()) return out;
+        if (!on() && !vary) return out;
         for (int i = 1; i + 1 < out.size(); i++)
             if (rnd.nextInt(100) < 15) Collections.swap(out, i, i + 1);
         return out;
@@ -203,72 +203,134 @@ public class Humanizer {
     public static class Plan {
         public final List<Action> actions;
         public final int[] finalMasks;
-        public final int badTaps;
+        public final int badTaps;          // wrong taps + over-rotation taps
         public final List<String> mistakes;
+        public String summary = "";        // e.g. "6x6, clean 60% -> clean: 2 wrong, 1 over-rotation"
         Plan(List<Action> a, int[] m, int bad, List<String> mk) { actions = a; finalMasks = m; badTaps = bad; mistakes = mk; }
     }
 
-    /** Number of bad taps for a round: in [min, max], weighted towards fewer. */
-    int pickBadTaps(int cap) {
-        int lo = Math.max(0, cfg.badTapsMin), hi = Math.max(lo, cfg.badTapsMax);
-        double u = Math.pow(rnd.nextDouble(), 1.6);
-        int n = lo + (int) Math.floor(u * (hi - lo + 1));
-        return Math.min(Math.min(n, hi), cap);
+    // ------------------------------------------------------- mistake model
+    /**
+     * Chance (%) that a round is "clean" (solved with only a few wrong taps), by board size, nudged down
+     * for boards that need more turns than usual for their size and up for easier ones.
+     */
+    int cleanPct(Board b, int neededTaps) {
+        int n = Math.max(4, Math.min(7, b.rows));
+        int base = n == 4 ? cfg.cleanPct4 : n == 5 ? cfg.cleanPct5 : n == 6 ? cfg.cleanPct6 : cfg.cleanPct7;
+        // typical turns needed per size (4x4 level 1 needed 13, the recorded 6x6 levels 10-30)
+        double typical = n == 4 ? 12 : n == 5 ? 16 : n == 6 ? 21 : 27;
+        double harder = Math.max(-1, Math.min(1, (neededTaps - typical) / typical));
+        // how far a harder/easier board can move the chance: little near 100% (early levels stay ~clean),
+        // up to 10 points in the middle
+        double room = Math.min(10, (100 - base) / 2.0 + 2);
+        int pct = (int) Math.round(base - harder * room);
+        return Math.max(1, Math.min(99, pct));
+    }
+
+    /** For the settings screen / tests. */
+    public int cleanPctPublic(Board b, int neededTaps) { return cleanPct(b, neededTaps); }
+
+    /** Wrong taps for a round: few on clean rounds, more on messy ones (more on bigger boards). */
+    int pickWrongTaps(Board b, boolean clean, int cap) {
+        int n = Math.max(4, Math.min(7, b.rows));
+        int lo, hi;
+        if (clean) { lo = n == 4 ? 0 : 1; hi = n == 4 ? 2 : 3; }
+        else { lo = 4; hi = n == 4 ? 5 : n == 5 ? 8 : n == 6 ? 12 : 15; }
+        double u = Math.pow(rnd.nextDouble(), 1.5);           // lean towards the low end
+        int w = lo + (int) Math.floor(u * (hi - lo + 1));
+        return Math.max(0, Math.min(Math.min(w, hi), cap));
+    }
+
+    /** Over-rotations: each correct tap has {@code overRotatePct}% chance of going one step too far. */
+    int pickOverRotations(int correctTaps, int cap) {
+        int k = 0;
+        for (int i = 0; i < correctTaps; i++) if (rnd.nextInt(1000) < cfg.overRotatePct * 10) k++;
+        return Math.max(0, Math.min(k, cap / 4));
     }
 
     /**
-     * Builds the taps for one round. Humanized first attempts get a random number of bad taps
-     * ({@code badTapsMin..badTapsMax}, except {@code perfectRoundPct}% of rounds), plus 0–2 tiles left
-     * half-turned and finished later. Every plan is simulated tap by tap and only kept if the road connects
+     * Builds the taps for one round. With mistakes on, the first attempt at a puzzle is either "clean"
+     * (a few wrong taps) or "messy" (more), with the clean chance falling as boards get bigger and harder
+     * (see {@link #cleanPct}), plus over-rotations on about {@code overRotatePct}% of the correct taps. Every plan is simulated tap by tap and only kept if the road connects
      * on the very last tap: the game ends the moment it connects, so later taps would never happen.
      *
      * @param tapCap most bad taps allowed (from the game's "N left" counter), or Integer.MAX_VALUE
      */
     public Plan plan(Board b, int[] turns, List<Integer> road, int tapDir, boolean firstAttempt, int tapCap) {
         List<Integer> need = new ArrayList<>();
-        for (int i = 0; i < turns.length; i++) if (taps(turns[i], tapDir) > 0) need.add(i);
+        int correctTaps = 0;
+        for (int i = 0; i < turns.length; i++) {
+            int t = taps(turns[i], tapDir);
+            if (t > 0) { need.add(i); correctTaps += t; }
+        }
         List<String> none = new ArrayList<>();
         if (need.isEmpty()) return new Plan(new ArrayList<>(), b.masks.clone(), 0, none);
-        if (!on()) {
-            List<Action> base = base(road, need, turns, tapDir, false);
-            return new Plan(base, simulate(b, base, tapDir, false), 0, none);
-        }
-        boolean perfect = !firstAttempt || rnd.nextInt(1000) < cfg.perfectRoundPct * 10;
-        int wantBad = perfect ? 0 : pickBadTaps(Math.max(0, tapCap));
-        int wantRevisits = perfect ? 0 : rnd.nextInt(3);
         Set<Integer> roadSet = new HashSet<>(road);
-        // the start habit is decided once per round, so retries below don't skew the percentages
-        Start start = pickStart(wantBad > 0);
+
+        // start habit (humanize only): leprechaun end / gold end / rare stray tap
+        Start start = on() ? pickStart(cfg.mistakes && firstAttempt) : Start.LEPRECHAUN;
         boolean fromGold = start == Start.GOLD;
         int stray = start == Start.STRAY ? pickStray(b, roadSet, road, need) : -1;
-        if (start == Start.STRAY && stray < 0) start = Start.LEPRECHAUN;   // nowhere sensible to stray to
+        if (start == Start.STRAY && stray < 0) start = Start.LEPRECHAUN;
+
+        if (!cfg.mistakes || !firstAttempt) {
+            List<Action> base = base(road, need, turns, tapDir, fromGold);
+            Plan plain = new Plan(base, simulate(b, base, tapDir, false), 0, none);
+            plain.summary = cfg.mistakes ? "retry, no mistakes" : "mistakes off";
+            return plain;
+        }
+
+        int cap = Math.max(0, tapCap);
+        int cleanPct = cleanPct(b, correctTaps);
+        boolean clean = rnd.nextInt(100) < cleanPct;
+        int wantWrong = pickWrongTaps(b, clean, cap);
+        int wantOver = pickOverRotations(correctTaps, cap - wantWrong);
+        String head = b.rows + "x" + b.cols + ", clean chance " + cleanPct + "% -> " + (clean ? "clean" : "messy");
+
         List<Action> fallback = null;
         for (int attempt = 0; attempt < 150; attempt++) {
             // fresh order each attempt: some orders connect a side road early whatever we do
-            List<Action> p = base(road, need, turns, tapDir, fromGold);
+            List<Action> p = base(road, need, turns, tapDir, fromGold, attempt > 0);
             if (fallback == null) fallback = copy(p);
             List<String> done = new ArrayList<>();
-            if (start == Start.STRAY) done.add("opened with a stray tap on " + name(b, stray));
-            else done.add("started at the " + (fromGold ? "gold" : "leprechaun") + " end");
-            // later attempts settle for fewer bad taps
-            int target = attempt < 50 ? wantBad : attempt < 100 ? (wantBad + 1) / 2 : Math.min(wantBad, 1);
-            if (start == Start.STRAY) target = Math.max(0, target - 1);   // the stray tap is one of them
-            int bad = start == Start.STRAY ? 1 : 0, guard = 0;
-            target += bad;
-            while (bad < target && guard++ < 40) {
-                int added = addMistake(b, p, roadSet, turns, tapDir, target - bad, done);
+            // later attempts settle for fewer mistakes
+            int wrongTarget = attempt < 50 ? wantWrong : attempt < 100 ? (wantWrong + 1) / 2 : Math.min(wantWrong, 1);
+            int overTarget = attempt < 100 ? wantOver : 0;
+            int wrong = 0, over = 0, guard = 0;
+            if (start == Start.STRAY && wrongTarget > 0) wrong = 1;   // the stray opening tap is one of them
+            while (wrong < wrongTarget && guard++ < 40) {
+                int added = addMistake(b, p, roadSet, turns, tapDir, wrongTarget - wrong, done, false);
                 if (added <= 0) break;
-                bad += added;
+                wrong += added;
             }
-            if (!perfect && bad == 0 && wantBad > 0) continue;
-            for (int r = 0; r < wantRevisits; r++) addRevisit(b, p, done);
-            if (start == Start.STRAY) p.add(0, new Action(stray, 1, b.masks[stray] == 0 ? "grass" : "wrong_tile"));
+            for (int k = 0; k < overTarget; k++) if (addOverRotation(b, p, done)) over++;
+            if (start == Start.STRAY && wrongTarget > 0)
+                p.add(0, new Action(stray, 1, b.masks[stray] == 0 ? "grass" : "wrong_tile"));
             int[] fin = simulate(b, p, tapDir, true);
-            if (fin != null) return new Plan(p, fin, bad, done);
+            if (fin != null) {
+                Plan plan = new Plan(p, fin, wrong + over * 4, done);
+                plan.summary = head + ": " + wrong + " wrong tap" + (wrong == 1 ? "" : "s")
+                        + (over > 0 ? ", " + over + " over-rotation" + (over == 1 ? "" : "s") : "");
+                return plan;
+            }
         }
-        List<String> note = new ArrayList<>();
-        note.add("started at the " + (fromGold ? "gold" : "leprechaun") + " end");
-        return new Plan(fallback, simulate(b, fallback, tapDir, false), 0, note);
+        Plan plain = new Plan(fallback, simulate(b, fallback, tapDir, false), 0, none);
+        plain.summary = head + ": couldn't fit mistakes on this board";
+        return plain;
+    }
+
+    /** Turns a correct tile one step too far, then all the way round to where it should be (+4 taps). */
+    boolean addOverRotation(Board b, List<Action> p, List<String> done) {
+        int last = p.size() - 1;
+        List<Integer> tiles = new ArrayList<>();
+        for (int i = 0; i < last; i++) if (p.get(i).kind.equals("tile")) tiles.add(i);
+        if (tiles.isEmpty()) return false;
+        int i = tiles.get(rnd.nextInt(tiles.size()));
+        Action a = p.get(i);
+        p.add(i + 1, new Action(a.cell, 1, "overshoot"));
+        p.add(i + 2, new Action(a.cell, 3, "correction"));
+        done.add("over-rotated " + name(b, a.cell));
+        return true;
     }
 
     /**
@@ -276,9 +338,14 @@ public class Humanizer {
      * (first turn, then the rest) so bad taps can fit after the first tap.
      */
     List<Action> base(List<Integer> road, List<Integer> need, int[] turns, int tapDir, boolean fromGold) {
+        return base(road, need, turns, tapDir, fromGold, false);
+    }
+
+    /** @param vary shuffle neighbouring tiles a little even with humanize off (used when retrying a plan) */
+    List<Action> base(List<Integer> road, List<Integer> need, int[] turns, int tapDir, boolean fromGold, boolean vary) {
         List<Action> base = new ArrayList<>();
-        for (int idx : order(road, need, fromGold)) base.add(new Action(idx, taps(turns[idx], tapDir), "tile"));
-        if (on() && base.size() == 1 && base.get(0).taps >= 2) {
+        for (int idx : order(road, need, fromGold, vary)) base.add(new Action(idx, taps(turns[idx], tapDir), "tile"));
+        if ((on() || cfg.mistakes) && base.size() == 1 && base.get(0).taps >= 2) {
             Action a = base.get(0);
             base.add(new Action(a.cell, a.taps - 1, "tile"));
             a.taps = 1;
@@ -308,7 +375,7 @@ public class Humanizer {
      * The final action always stays final.
      */
     int addMistake(Board b, List<Action> p, Set<Integer> roadSet, int[] turns, int tapDir, int remaining,
-                   List<String> done) {
+                   List<String> done, boolean allowOver) {
         int last = p.size() - 1;
         List<Integer> offRoad = new ArrayList<>(), grass = new ArrayList<>(), settled = new ArrayList<>();
         for (int i = 0; i < b.masks.length; i++) {
@@ -318,8 +385,8 @@ public class Humanizer {
             else if (taps(turns[i], tapDir) == 0) settled.add(i);
         }
         // weights per kind, only for kinds that fit
-        int wOver = remaining >= 4 && last >= 1 ? 30 : 0;
-        int wBounce = remaining >= 4 && last >= 1 ? 10 : 0;
+        int wOver = allowOver && remaining >= 4 && last >= 1 ? 30 : 0;
+        int wBounce = allowOver && remaining >= 4 && last >= 1 ? 10 : 0;
         int wBump = remaining >= 4 && !settled.isEmpty() ? 8 : 0;
         int wWrong = !offRoad.isEmpty() ? 37 : 0;
         int wGrass = !grass.isEmpty() ? 15 : 0;
@@ -441,7 +508,7 @@ public class Humanizer {
         return m;
     }
 
-    static boolean connected(Board b, int[] masks) {
+    public static boolean connected(Board b, int[] masks) {
         Board c = new Board(b.left, b.top, b.size, b.size, b.rows, b.cols);
         c.masks = masks;
         c.srcR = b.srcR; c.srcC = b.srcC; c.dstR = b.dstR; c.dstC = b.dstC;

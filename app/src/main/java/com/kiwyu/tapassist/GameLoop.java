@@ -321,7 +321,7 @@ public class GameLoop implements Runnable {
             return;
         }
         if (attempts == 1) human.newRound();
-        int left = cfg.humanize ? tapsLeft() : -1;
+        int left = cfg.mistakes || cfg.humanize ? tapsLeft() : -1;
         int cap = left < 0 ? Integer.MAX_VALUE : left - solver.bestTaps() - cfg.tapsLeftMargin;
         Humanizer.Plan plan = human.plan(board, turns, solver.road(), cfg.tapDir, attempts == 1, cap);
         int[] target = plan.finalMasks;
@@ -330,9 +330,11 @@ public class GameLoop implements Runnable {
             if (think > 0) { svc.status("Reading the board…"); AutoPlayerService.sleep(think); }
         }
         svc.status("Solving: " + solver.bestTaps() + " taps"
-                + (plan.badTaps > 0 ? " + " + plan.badTaps + " bad" : "")
+                + (plan.badTaps > 0 ? " + " + plan.badTaps + " extra" : "")
                 + (left >= 0 ? " (" + left + " left)" : "")
-                + (plan.mistakes.isEmpty() ? "" : "\n" + String.join(", ", plan.mistakes)));
+                + (plan.summary.isEmpty() ? "" : "\n" + plan.summary));
+        if (cfg.logTaps) log.event("round: " + plan.summary + "; needed " + solver.bestTaps() + " taps, planned "
+                + (solver.bestTaps() + plan.badTaps));
         float hw = board.pitchX / 2f, hh = board.pitchY / 2f;
         int prev = -1;
         int distractAt = plan.actions.isEmpty() ? -1 : human.rnd.nextInt(plan.actions.size());

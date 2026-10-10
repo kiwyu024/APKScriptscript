@@ -38,8 +38,10 @@ public class Config {
     public int reactMinMs = 600, reactMaxMs = 2200; // before tapping the replay button
     public int startLepPct = 65;     // rounds that start at the tile next to the leprechaun
     public int startPotPct = 34;     // ... next to the pot of gold; the rest open with a stray tap elsewhere
-    public int perfectRoundPct = 1;  // humanized rounds with no bad taps at all
-    public int badTapsMin = 1, badTapsMax = 15;  // bad taps per round (weighted towards fewer)
+    // Mistakes (independent of humanize): chance of a "clean" round by board size, the rest are messy.
+    public boolean mistakes = true;
+    public int cleanPct4 = 97, cleanPct5 = 80, cleanPct6 = 60, cleanPct7 = 10;
+    public int overRotatePct = 5;    // % of correct taps that go one step too far (then all the way round)
     public int tapsLeftMargin = 3;   // keep this many of the game's "N left" taps unused
     public int hesitationPct = 6;    // chance per tile move of a 0.7-3 s hesitation
     public int distractionPct = 2;   // chance per round of a 5-25 s pause mid-round
@@ -82,8 +84,10 @@ public class Config {
         k.reactMinMs = p.getInt("reactMinMs", k.reactMinMs); k.reactMaxMs = p.getInt("reactMaxMs", k.reactMaxMs);
         k.startLepPct = p.getInt("startLepPct", k.startLepPct);
         k.startPotPct = p.getInt("startPotPct", k.startPotPct);
-        k.perfectRoundPct = p.getInt("perfectRoundPct", k.perfectRoundPct);
-        k.badTapsMin = p.getInt("badTapsMin", k.badTapsMin); k.badTapsMax = p.getInt("badTapsMax", k.badTapsMax);
+        k.mistakes = p.getBoolean("mistakes", k.mistakes);
+        k.cleanPct4 = p.getInt("cleanPct4", k.cleanPct4); k.cleanPct5 = p.getInt("cleanPct5", k.cleanPct5);
+        k.cleanPct6 = p.getInt("cleanPct6", k.cleanPct6); k.cleanPct7 = p.getInt("cleanPct7", k.cleanPct7);
+        k.overRotatePct = p.getInt("overRotatePct", k.overRotatePct);
         k.tapsLeftMargin = p.getInt("tapsLeftMargin", k.tapsLeftMargin);
         k.hesitationPct = p.getInt("hesitationPct", k.hesitationPct);
         k.distractionPct = p.getInt("distractionPct", k.distractionPct);
@@ -113,8 +117,10 @@ public class Config {
                 .putInt("thinkMinMs", thinkMinMs).putInt("thinkMaxMs", thinkMaxMs)
                 .putInt("reactMinMs", reactMinMs).putInt("reactMaxMs", reactMaxMs)
                 .putInt("startLepPct", startLepPct).putInt("startPotPct", startPotPct)
-                .putInt("perfectRoundPct", perfectRoundPct)
-                .putInt("badTapsMin", badTapsMin).putInt("badTapsMax", badTapsMax)
+                .putBoolean("mistakes", mistakes)
+                .putInt("cleanPct4", cleanPct4).putInt("cleanPct5", cleanPct5)
+                .putInt("cleanPct6", cleanPct6).putInt("cleanPct7", cleanPct7)
+                .putInt("overRotatePct", overRotatePct)
                 .putInt("tapsLeftMargin", tapsLeftMargin)
                 .putInt("hesitationPct", hesitationPct).putInt("distractionPct", distractionPct)
                 .putBoolean("takeBreaks", takeBreaks)

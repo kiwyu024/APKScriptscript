@@ -18,7 +18,7 @@ All measurements are proportional to the screen and board size.
 
 ## Install
 
-1. Copy `dist/TapAssist-0.8.apk` to the phone and install it (allow installs from that app when asked).
+1. Copy `dist/TapAssist-0.8.1.apk` to the phone and install it (allow installs from that app when asked).
 2. Open **Tap Assist** → **App info** → ⋮ → **Allow restricted settings**. Android 13+ requires this before a
    sideloaded app can use accessibility.
 3. **Accessibility settings** → Installed apps → **Tap Assist** → On.
@@ -27,6 +27,23 @@ All measurements are proportional to the screen and board size.
 ⚙ → **Check board now** shows what the bot reads: the tile grid (`LEP`/`POT`/openings), the tap count
 for the road, the replay button position and the X detector score. **Save debug snapshot**, or the
 "Save debug images" setting, writes raw and annotated screenshots to `Pictures/TapAssist`.
+
+## Mistakes (on by default, independent of Humanize)
+
+Each puzzle is either **clean** (a few wrong taps) or **messy** (more). The clean chance falls with board size:
+
+| Board | Clean chance | Clean round | Messy round |
+|---|---|---|---|
+| 4×4 | 97% | 0–2 wrong taps | 4–5 wrong taps |
+| 5×5 | 80% | 1–3 | 4–8 |
+| 6×6 | 60% | 1–3 | 4–12 |
+| 7×7 | 10% | 1–3 | 4–15 |
+
+The chance is nudged down for boards that need more turns than usual for their size, and up for easier ones (only
+slightly near 100%). Wrong taps go on road tiles that aren't on the route, on grass, or bump a correct tile and fix
+it. On top of that, about 5% of the correct taps **over-rotate**: the right tile goes one step too far, then all the
+way round (+4 taps). Plans are simulated so the road connects on the final tap. Retries after a misread are clean.
+All the numbers are in Settings → Mistakes.
 
 ## Humanize mode (anti-cheat testing)
 
