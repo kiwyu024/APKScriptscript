@@ -25,7 +25,7 @@ public class MainActivity extends Activity {
     TextView serviceState;
     final Map<String, EditText> fields = new LinkedHashMap<>();
     Spinner dir;
-    CheckBox back, debug, humanize, logTaps, handleAds;
+    CheckBox back, debug, humanize, logTaps, handleAds, takeBreaks;
 
     static final String HELP =
             "Setup (one time):\n" +
@@ -76,17 +76,24 @@ public class MainActivity extends Activity {
         num("pressMinMs", "Press length min, ms", cfg.pressMinMs);
         num("pressMaxMs", "Press length max, ms", cfg.pressMaxMs);
         num("driftPx", "Finger drift while pressed, px (keep ≤ 8)", cfg.driftPx);
-        num("moveMinMs", "Extra pause moving to another tile, min ms", cfg.moveMinMs);
-        num("moveMaxMs", "Extra pause moving to another tile, max ms", cfg.moveMaxMs);
+        num("hesitationPct", "Hesitation chance per tile move, % (0.7-3 s)", cfg.hesitationPct);
+        num("distractionPct", "Distraction chance per round, % (5-25 s pause)", cfg.distractionPct);
         num("thinkMinMs", "Pause before solving, min ms", cfg.thinkMinMs);
         num("thinkMaxMs", "Pause before solving, max ms", cfg.thinkMaxMs);
         num("reactMinMs", "Pause before tapping replay, min ms", cfg.reactMinMs);
         num("reactMaxMs", "Pause before tapping replay, max ms", cfg.reactMaxMs);
-        num("perfectRoundPct", "Rounds with no mistake, % (others get at least one)", cfg.perfectRoundPct);
-        num("extraMistakePct", "Chance of each further mistake in a round, % (max 3)", cfg.extraMistakePct);
-        num("maxExtraTaps", "Max extra taps spent on mistakes per round", cfg.maxExtraTaps);
-        note("Mistakes: over-rotating a tile and going round again (+4 taps), tapping a tile off the road (+1-2), " +
-                "or leaving a tile half-turned and coming back later (+0).");
+        num("perfectRoundPct", "Rounds with no bad taps, %", cfg.perfectRoundPct);
+        num("badTapsMin", "Bad taps per round, min", cfg.badTapsMin);
+        num("badTapsMax", "Bad taps per round, max", cfg.badTapsMax);
+        num("tapsLeftMargin", "Keep this many of the game's 'N left' taps spare", cfg.tapsLeftMargin);
+        note("Bad taps: over-rotating or double-tapping a tile and going round again (+4), tapping a road tile " +
+                "that isn't on the route (+1-3), bumping a correct tile and fixing it (+4), tapping grass (+1). " +
+                "Plus 0-2 tiles left half-turned and finished later (free). Counts lean towards the low end.");
+        takeBreaks = check("Take breaks between rounds", cfg.takeBreaks);
+        num("breakEveryMin", "Break every N rounds, min", cfg.breakEveryMin);
+        num("breakEveryMax", "Break every N rounds, max", cfg.breakEveryMax);
+        num("breakMinSec", "Break length, min seconds", cfg.breakMinSec);
+        num("breakMaxSec", "Break length, max seconds", cfg.breakMaxSec);
         logTaps = check("Log every tap to Download/TerraMineBot (CSV, saved on stop)", cfg.logTaps);
 
         title("Replay");
@@ -137,12 +144,15 @@ public class MainActivity extends Activity {
             cfg.jitterPct = i("jitterPct");
             cfg.pressMinMs = i("pressMinMs"); cfg.pressMaxMs = i("pressMaxMs");
             cfg.driftPx = i("driftPx");
-            cfg.moveMinMs = i("moveMinMs"); cfg.moveMaxMs = i("moveMaxMs");
+            cfg.hesitationPct = i("hesitationPct"); cfg.distractionPct = i("distractionPct");
             cfg.thinkMinMs = i("thinkMinMs"); cfg.thinkMaxMs = i("thinkMaxMs");
             cfg.reactMinMs = i("reactMinMs"); cfg.reactMaxMs = i("reactMaxMs");
             cfg.perfectRoundPct = i("perfectRoundPct");
-            cfg.extraMistakePct = i("extraMistakePct");
-            cfg.maxExtraTaps = i("maxExtraTaps");
+            cfg.badTapsMin = i("badTapsMin"); cfg.badTapsMax = i("badTapsMax");
+            cfg.tapsLeftMargin = i("tapsLeftMargin");
+            cfg.takeBreaks = takeBreaks.isChecked();
+            cfg.breakEveryMin = i("breakEveryMin"); cfg.breakEveryMax = i("breakEveryMax");
+            cfg.breakMinSec = i("breakMinSec"); cfg.breakMaxSec = i("breakMaxSec");
             cfg.logTaps = logTaps.isChecked();
             cfg.handleAds = handleAds.isChecked();
             cfg.debugDump = debug.isChecked();

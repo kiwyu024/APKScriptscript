@@ -1,0 +1,47 @@
+# Gold Rush anti-cheat: signals and how the test bot answers them
+
+This document has two halves. The first is how I would detect a bot in TerraMine Gold Rush. The second is what
+the bot in this repo does to look natural against each check. The **residual tells** column lists what it can't
+hide. Those are the checks to build first.
+
+## Where to collect data
+
+Log every touch (client) and every solved round (server):
+
+- **Per touch:** timestamp (ms), x/y relative to the tile hit, tile row/col, whether it rotated something,
+  touch-down/up times. Also the raw touch fields: pressure/force, size/radius, tool type, device id, and for a
+  WebView `Touch.force` and `radiusX/radiusY`.
+- **Per round:** board size, leprechaun/pot cells, minimum taps (solve it server-side), taps used, time from
+  board shown to first tap, total time, order tiles were touched in, result.
+- **Per session:** rounds, gaps between rounds, Play Again reaction time, time of day, device/app info.
+
+## Signals → bot counter → residual tells
+
+| # | Signal (what an anti-cheat looks at) | What the humanized bot does | Residual tells |
+|---|---|---|---|
+| 1 | **Tap position**: always the exact tile centre, or a tight/identical spread every session | Normal spread around a per-session thumb bias (random direction, 4–18% of half a tile). Spread size varies by session. About 4% of taps are sloppy, out to 80% of the way to the edge. | The spread is a clean 2-D Gaussian. Real thumbs are skewed and depend on where the tile is on screen (reach). |
+| 2 | **Press length / finger slide**: constant press time, zero movement | Log-normal press length with a per-session median, scaled by tempo. 0–N px slide in a random direction. | **Pressure and contact size can't be set** by an AccessibilityService; they come out at fixed values. Log them. |
+| 3 | **Tap rhythm**: identical gaps, or a narrow distribution | Log-normal gaps. Repeat taps on one tile are faster than moving to another. Travel time follows Fitts' law (longer for farther tiles). There are hesitations mid-solve. | Gaps don't respond to the rotation animation the way a person waiting for it might. |
+| 4 | **Time to first tap**: instant, or unrelated to board difficulty | "Reading" pause that grows with the number of taps needed, × session tempo × round mood × noise. | The bot's screenshot loop sets a floor, roughly one poll (0.5–1 s, jittered). |
+| 5 | **Optimality**: taps used = minimum taps every round | 1–15 bad taps per round (skewed toward fewer), plus 0–2 "come back later" revisits. 1% of rounds are perfect. | **The underlying route is always the optimal one.** People often try a longer or wrong route first, then change their mind. Compare *which tiles* were touched with the optimal set. |
+| 6 | **Mistake realism**: errors random across the board, or perfectly spaced | Over-rotations (go round again), double-tap bounces (2nd tap 55–120 ms later), taps on tiles near the road, bumping a correct tile and fixing it, taps on grass. Wrong tiles are picked by distance to the road, and mistakes happen next to the tile being worked on. | The bot never misreads a tile. Its mistakes are deliberate, so it never "fixes" a tile that wasn't broken in a way that suggests misperception. |
+| 7 | **Order**: row-by-row scanning | Usually follows the road from the leprechaun. Sometimes it starts from the pot or shuffles, and it occasionally swaps neighbouring tiles. | The order always covers exactly the optimal tiles plus mistakes. |
+| 8 | **Finishing**: the road completes before the "last" planned tap | Plans are simulated so the road connects on the final tap. | – |
+| 9 | **Consistency across rounds**: the same stats every round | Per-round "mood" speed factor. Fatigue slowly slows it down over a session and resets after a break. | The drift is smooth. Real fatigue is noisier and tied to time of day. |
+| 10 | **Session shape**: plays non-stop, rounds/hour constant, Play Again pressed at a fixed delay | Breaks every 8–25 rounds (45 s–5 min). Rare 5–25 s distractions mid-round. Log-normal Play Again reaction. Jittered poll interval. | No long off-hours gaps unless you stop it. A 24-hour activity histogram still exposes it. |
+| 11 | **Tap budget**: stays far from the "N left" limit | Reads "N left" through accessibility when the game exposes it and keeps a margin. | – |
+| 12 | **Automation present on the device** | Not hidden. | **Strongest check.** `AccessibilityManager.getEnabledAccessibilityServiceList()` lists enabled services. An unknown service with `canPerformGestures` + `canTakeScreenshot`, or the `com.kiwyu.terraminebot` package, is a direct flag. |
+| 13 | **Injected input** | Not hidden. | Gestures injected by an accessibility service may differ from real touches in pressure, size, device id or flags. Compare a real tap and a bot tap in your own logging to see which fields differ on your Android version. |
+| 14 | **Overlay**: a window over the game | The panel is an accessibility overlay. | Apps can check for obscured touches with `FLAG_WINDOW_IS_OBSCURED` / `FLAG_WINDOW_IS_PARTIALLY_OBSCURED` on MotionEvents. |
+
+## Suggested detection approach
+
+1. **Hard checks (cheap, reliable):** #12, #13 and #14. Treat them as strong evidence rather than proof, since
+   legitimate accessibility tools exist.
+2. **Per-round features to the server:** taps vs. minimum, time to first tap, gap distribution (median, IQR,
+   coefficient of variation), tap offset from tile centre (mean, covariance), share of taps on optimal tiles,
+   and whether wrong taps are near the road.
+3. **Per-player model:** compare a player's features with the population and with their own history. Bots
+   are often *too* average, and too stable across days.
+4. **Run this bot against it:** with humanize off (obvious bot), then on with default settings, then with the
+   ranges pushed. The tap log CSV (`Download/TerraMineBot`) gives the ground truth for each tap.

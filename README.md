@@ -18,7 +18,7 @@ All measurements are proportional to the screen and board size.
 
 ## Install
 
-1. Copy `dist/TerraMineBot-0.5.apk` to the phone and install it (allow installs from that app when asked).
+1. Copy `dist/TerraMineBot-0.6.apk` to the phone and install it (allow installs from that app when asked).
 2. Open **TerraMine Bot** → **App info** → ⋮ → **Allow restricted settings**. Android 13+ requires this before a
    sideloaded app can use accessibility.
 3. **Accessibility settings** → Installed apps → **TerraMine Bot** → On.
@@ -30,31 +30,30 @@ for the road, the replay button position and the X detector score. **Save debug 
 
 ## Humanize mode (anti-cheat testing)
 
-Settings → **Humanize taps** randomises:
+See [docs/ANTI_CHEAT_NOTES.md](docs/ANTI_CHEAT_NOTES.md). It lists the signals an anti-cheat for this game should
+look at, what the bot does about each one, and what it can't hide (the strongest checks).
 
-- the tap position inside each tile (normal spread, clamped; default up to 55% of half a tile from centre)
-- press length (45–130 ms) and a small finger slide while pressed (±3 px)
-- gaps between taps (log-normal around "Delay between taps") plus extra time when moving to another tile
-- a "reading the board" pause before the first tap (0.7–2.6 s) and a reaction pause before Play Again
-- tile order (usually along the road from the leprechaun, sometimes from the pot, sometimes shuffled, with
-  neighbouring tiles occasionally swapped)
-- mistakes: every humanized round makes at least one, except "Rounds with no mistake" (default 1%).
-  Each further mistake has a 30% chance (max 3, max 8 extra taps per round). The kinds are:
-  - over-rotating a tile one step, then going all the way round to fix it (+4 taps)
-  - tapping a tile that isn't on the road once or twice (+1–2), or bumping a road tile that was already right
-    and turning it back (+4)
-  - leaving a tile half-turned and coming back to finish it later (+0)
+Settings → **Humanize taps** layers randomness at three levels:
 
-  Each round's taps are planned up front and simulated tap by tap. A plan is used only if the road connects on
-  the very last tap, because the game ends the moment it connects and later "mistakes" would never happen.
-  Retries after a misread are played without mistakes.
+- **Session:** a habitual thumb offset and spread, base speed, typical press length, and rounds until a break.
+- **Round:** mood (speed factor), slowly growing fatigue (resets after breaks), **1–15 bad taps** (weighted
+  towards fewer; 1% of rounds perfect), 0–2 tiles left half-turned and finished later, and a rare 5–25 s distraction.
+- **Tap:** position around the thumb offset (4% sloppy), log-normal press length, finger slide, faster repeat
+  taps on one tile, Fitts-style travel time between tiles, hesitations, and a "noticing" pause before fixing a
+  mistake. Limits are soft, so values never pile up on a bound.
 
-With humanize off, taps are exact tile centres, 40 ms long, at fixed intervals, in row order. This gives a
-clean "obvious bot" baseline to compare against.
+Bad taps are over-rotations and accidental double taps (then going round again, +4), taps on road tiles off the
+route (+1–3), bumping a correct tile and fixing it (+4), and taps on grass (+1). They are placed near the tiles
+being worked on. When the game's "N left" counter is readable through accessibility, bad taps stay within it
+(minus a margin). Each round's plan is simulated tap by tap, and the road only connects on the very last tap.
+The bot also takes breaks every 8–25 rounds (45 s–5 min), and its screen polling and Play Again reaction are jittered.
+
+With humanize off, taps are exact tile centres, 40 ms long, at fixed intervals, in row order, with no mistakes.
+That's the "obvious bot" baseline.
 
 **Log every tap** writes `Download/TerraMineBot/taps_<time>.csv` when the bot stops
-(`epoch_ms,x,y,press_ms,drift_x,drift_y,kind,detail`; kind is `tile`, `overshoot`, `correction`,
-`wrong_tile`, `revisit`, `replay` or `ad_close`), so you can line it up with your anti-cheat telemetry.
+(`epoch_ms,x,y,press_ms,drift_x,drift_y,kind,detail`; kind is `tile`, `overshoot`, `bounce`,
+`correction`, `wrong_tile`, `grass`, `revisit`, `replay` or `ad_close`), so you can line it up with your anti-cheat telemetry.
 
 ## Build
 

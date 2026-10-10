@@ -34,12 +34,16 @@ public class Config {
     public int jitterPct = 55;       // max tap offset from tile centre, % of half a tile
     public int pressMinMs = 45, pressMaxMs = 130;
     public int driftPx = 3;          // finger slide while pressed
-    public int moveMinMs = 80, moveMaxMs = 380;     // extra gap when moving to another tile
     public int thinkMinMs = 700, thinkMaxMs = 2600; // before the first tap of a puzzle
     public int reactMinMs = 600, reactMaxMs = 2200; // before tapping the replay button
-    public int perfectRoundPct = 1;  // humanized rounds with no mistake at all
-    public int extraMistakePct = 30; // chance of each further mistake in a round (max 3)
-    public int maxExtraTaps = 8;     // cap on taps spent on mistakes per round
+    public int perfectRoundPct = 1;  // humanized rounds with no bad taps at all
+    public int badTapsMin = 1, badTapsMax = 15;  // bad taps per round (weighted towards fewer)
+    public int tapsLeftMargin = 3;   // keep this many of the game's "N left" taps unused
+    public int hesitationPct = 6;    // chance per tile move of a 0.7-3 s hesitation
+    public int distractionPct = 2;   // chance per round of a 5-25 s pause mid-round
+    public boolean takeBreaks = true;
+    public int breakEveryMin = 8, breakEveryMax = 25;   // rounds between breaks
+    public int breakMinSec = 45, breakMaxSec = 300;
     public boolean logTaps = true;
 
     /** Ads: off by default; turn on only in builds that serve AdMob test ads. */
@@ -72,12 +76,16 @@ public class Config {
         k.jitterPct = p.getInt("jitterPct", k.jitterPct);
         k.pressMinMs = p.getInt("pressMinMs", k.pressMinMs); k.pressMaxMs = p.getInt("pressMaxMs", k.pressMaxMs);
         k.driftPx = p.getInt("driftPx", k.driftPx);
-        k.moveMinMs = p.getInt("moveMinMs", k.moveMinMs); k.moveMaxMs = p.getInt("moveMaxMs", k.moveMaxMs);
         k.thinkMinMs = p.getInt("thinkMinMs", k.thinkMinMs); k.thinkMaxMs = p.getInt("thinkMaxMs", k.thinkMaxMs);
         k.reactMinMs = p.getInt("reactMinMs", k.reactMinMs); k.reactMaxMs = p.getInt("reactMaxMs", k.reactMaxMs);
         k.perfectRoundPct = p.getInt("perfectRoundPct", k.perfectRoundPct);
-        k.extraMistakePct = p.getInt("extraMistakePct", k.extraMistakePct);
-        k.maxExtraTaps = p.getInt("maxExtraTaps", k.maxExtraTaps);
+        k.badTapsMin = p.getInt("badTapsMin", k.badTapsMin); k.badTapsMax = p.getInt("badTapsMax", k.badTapsMax);
+        k.tapsLeftMargin = p.getInt("tapsLeftMargin", k.tapsLeftMargin);
+        k.hesitationPct = p.getInt("hesitationPct", k.hesitationPct);
+        k.distractionPct = p.getInt("distractionPct", k.distractionPct);
+        k.takeBreaks = p.getBoolean("takeBreaks", k.takeBreaks);
+        k.breakEveryMin = p.getInt("breakEveryMin", k.breakEveryMin); k.breakEveryMax = p.getInt("breakEveryMax", k.breakEveryMax);
+        k.breakMinSec = p.getInt("breakMinSec", k.breakMinSec); k.breakMaxSec = p.getInt("breakMaxSec", k.breakMaxSec);
         k.logTaps = p.getBoolean("logTaps", k.logTaps);
         k.handleAds = p.getBoolean("handleAds", k.handleAds);
         k.gamePackage = p.getString("gamePackage", "");
@@ -98,11 +106,15 @@ public class Config {
                 .putBoolean("backAsLastResort", backAsLastResort)
                 .putBoolean("humanize", humanize).putInt("jitterPct", jitterPct)
                 .putInt("pressMinMs", pressMinMs).putInt("pressMaxMs", pressMaxMs).putInt("driftPx", driftPx)
-                .putInt("moveMinMs", moveMinMs).putInt("moveMaxMs", moveMaxMs)
                 .putInt("thinkMinMs", thinkMinMs).putInt("thinkMaxMs", thinkMaxMs)
                 .putInt("reactMinMs", reactMinMs).putInt("reactMaxMs", reactMaxMs)
                 .putInt("perfectRoundPct", perfectRoundPct)
-                .putInt("extraMistakePct", extraMistakePct).putInt("maxExtraTaps", maxExtraTaps).putBoolean("logTaps", logTaps)
+                .putInt("badTapsMin", badTapsMin).putInt("badTapsMax", badTapsMax)
+                .putInt("tapsLeftMargin", tapsLeftMargin)
+                .putInt("hesitationPct", hesitationPct).putInt("distractionPct", distractionPct)
+                .putBoolean("takeBreaks", takeBreaks)
+                .putInt("breakEveryMin", breakEveryMin).putInt("breakEveryMax", breakEveryMax)
+                .putInt("breakMinSec", breakMinSec).putInt("breakMaxSec", breakMaxSec).putBoolean("logTaps", logTaps)
                 .putBoolean("handleAds", handleAds)
                 .putString("gamePackage", gamePackage)
                 .putBoolean("debugDump", debugDump)

@@ -70,7 +70,7 @@ public class GameLoop implements Runnable {
         while (running) {
             try { step(); }
             catch (Exception e) { svc.status("Error: " + e.getClass().getSimpleName() + " " + e.getMessage()); }
-            AutoPlayerService.sleep(cfg.loopMs);
+            AutoPlayerService.sleep(human.loopDelay());
         }
         String saved = cfg.logTaps ? log.save(svc) : null;
         svc.status("Stopped (solved " + solvedCount + ")" + (saved == null ? "" : "\nTap log: " + saved));
@@ -126,6 +126,8 @@ public class GameLoop implements Runnable {
                 svc.status("'Watch Ad' screen — ad automation is off, tap it yourself");
                 return;
             }
+            long brk = human.breakDue();
+            if (brk > 0 && !restFor(brk)) return;
             AutoPlayerService.sleep(human.reactionPause());
             svc.status("Tapping " + (replay[4] == 1 ? "Watch Ad" : "Play Again") + " (solved " + solvedCount + ")");
             tap(replay[0], replay[1], replay[2] * 0.8f, replay[3] * 0.8f, "replay", replay[4] == 1 ? "watch_ad" : "play_again");
@@ -167,6 +169,31 @@ public class GameLoop implements Runnable {
             }
         }
         svc.status("Waiting for the Gold Rush puzzle…");
+    }
+
+    /** Sleeps in 1 s steps with a countdown; false if stopped meanwhile. */
+    boolean restFor(long ms) {
+        long end = System.currentTimeMillis() + ms;
+        while (running) {
+            long left = end - System.currentTimeMillis();
+            if (left <= 0) return true;
+            svc.status("Taking a break — " + (left / 1000) + "s");
+            AutoPlayerService.sleep(Math.min(1000, left));
+        }
+        return false;
+    }
+
+    static final java.util.regex.Pattern TAPS_LEFT = java.util.regex.Pattern.compile("(\\d+)\\s*left");
+
+    /** The game's "N left" tap counter if it is readable through accessibility, else -1. */
+    int tapsLeft() {
+        for (AccessibilityNodeInfo n : svc.findNodes(new String[]{"left"}, false)) {
+            String t = (n.getText() == null ? "" : n.getText().toString())
+                    + " " + (n.getContentDescription() == null ? "" : n.getContentDescription().toString());
+            java.util.regex.Matcher m = TAPS_LEFT.matcher(t);
+            if (m.find()) return Integer.parseInt(m.group(1));
+        }
+        return -1;
     }
 
     // ----------------------------------------------------------------- states
@@ -293,28 +320,38 @@ public class GameLoop implements Runnable {
             svc.status("Road already connected — waiting");
             return;
         }
-        Humanizer.Plan plan = human.plan(board, turns, solver.road(), cfg.tapDir, attempts == 1);
+        if (attempts == 1) human.newRound();
+        int left = cfg.humanize ? tapsLeft() : -1;
+        int cap = left < 0 ? Integer.MAX_VALUE : left - solver.bestTaps() - cfg.tapsLeftMargin;
+        Humanizer.Plan plan = human.plan(board, turns, solver.road(), cfg.tapDir, attempts == 1, cap);
         int[] target = plan.finalMasks;
         if (attempts == 1) {
-            long think = human.thinkPause();
+            long think = human.thinkPause(solver.bestTaps());
             if (think > 0) { svc.status("Reading the board…"); AutoPlayerService.sleep(think); }
         }
         svc.status("Solving: " + solver.bestTaps() + " taps"
-                + (plan.mistakes.isEmpty() ? "" : " + " + plan.extraTaps + " (" + String.join(", ", plan.mistakes) + ")"));
+                + (plan.badTaps > 0 ? " + " + plan.badTaps + " bad" : "")
+                + (left >= 0 ? " (" + left + " left)" : "")
+                + (plan.mistakes.isEmpty() ? "" : "\n" + String.join(", ", plan.mistakes)));
         float hw = board.pitchX / 2f, hh = board.pitchY / 2f;
-        boolean first = true;
-        for (Humanizer.Action act : plan.actions) {
-            if (!running) break;
+        int prev = -1;
+        int distractAt = plan.actions.isEmpty() ? -1 : human.rnd.nextInt(plan.actions.size());
+        long distraction = human.distraction();
+        for (int ai = 0; ai < plan.actions.size() && running; ai++) {
+            Humanizer.Action act = plan.actions.get(ai);
             int r = act.cell / board.cols, c = act.cell % board.cols;
-            if (!first) {
-                AutoPlayerService.sleep(human.gapNextTile());
+            if (ai == distractAt && distraction > 0 && ai > 0) AutoPlayerService.sleep(distraction);
+            if (prev >= 0) {
+                if (act.kind.equals("bounce")) AutoPlayerService.sleep(human.bounceGap());
+                else if (act.cell == prev) AutoPlayerService.sleep(human.gapSameTile());
+                else AutoPlayerService.sleep(human.gapMove(board, prev, act.cell));
                 if (act.kind.equals("correction") || act.kind.equals("revisit")) AutoPlayerService.sleep(human.noticePause());
             }
-            first = false;
             for (int t = 0; t < act.taps && running; t++) {
                 if (t > 0) AutoPlayerService.sleep(human.gapSameTile());
                 tap(board.cx(c), board.cy(r), hw, hh, act.kind, r + ":" + c);
             }
+            prev = act.cell;
         }
         AutoPlayerService.sleep(cfg.tapDelayMs);
         lastTarget = target;

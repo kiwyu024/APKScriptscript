@@ -3,72 +3,178 @@ package com.kiwyu.terraminebot;
 import java.security.SecureRandom;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Random;
+import java.util.Set;
 
 /**
- * Randomises how the bot taps, so the developer can check whether their anti-cheat still
- * notices it: where inside a tile it taps, how long each touch lasts, small finger drift,
- * the pauses between taps, a "reading the board" pause, tile order and the odd mistake.
- * With humanize off everything is exact and fixed (centre taps, fixed delays, row order).
+ * Makes the bot's play look like a person's, for testing the game's anti-cheat (see docs/ANTI_CHEAT_NOTES.md).
+ *
+ * Randomness is layered:
+ *  - session: thumb bias and spread, base speed, typical press length, rounds until a break
+ *  - round:   mood (speed factor), fatigue, number of bad taps, revisits, an occasional distraction
+ *  - tap:     position, press length, finger slide, gaps (Fitts-style travel time), hesitations
+ *
+ * With humanize off everything is exact and fixed (centre taps, fixed delays, row order, no mistakes).
  */
 public class Humanizer {
     final Config cfg;
     final Random rnd = new SecureRandom();
 
-    public Humanizer(Config cfg) { this.cfg = cfg; }
+    // session profile
+    double speed;          // > 1 = slower player
+    float biasX, biasY;    // habitual offset from the tile centre, fraction of half a tile
+    float spread;          // how loose this session's taps are
+    double pressMedian;    // ms
+    int roundsSinceBreak, roundsUntilBreak;
+    // round state
+    double mood = 1;
+
+    public Humanizer(Config cfg) {
+        this.cfg = cfg;
+        newSession();
+    }
 
     boolean on() { return cfg.humanize; }
 
-    /** A tap point inside a box of half-size (hw, hh) around (cx, cy): normal spread, clamped to stay inside. */
+    void newSession() {
+        speed = logNormal(1.0, 0.15);
+        double ang = rnd.nextDouble() * 2 * Math.PI, mag = 0.04 + rnd.nextDouble() * 0.14;
+        biasX = (float) (Math.cos(ang) * mag);
+        biasY = (float) (Math.sin(ang) * mag);
+        spread = 0.75f + rnd.nextFloat() * 0.5f;
+        pressMedian = 65 + rnd.nextInt(50);
+        roundsSinceBreak = 0;
+        roundsUntilBreak = range(cfg.breakEveryMin, cfg.breakEveryMax);
+    }
+
+    /** Call when a new puzzle starts. */
+    public void newRound() {
+        mood = logNormal(1.0, 0.12);
+        roundsSinceBreak++;
+    }
+
+    /** Overall slowness right now: session speed × round mood × fatigue. */
+    double tempo() {
+        double fatigue = Math.min(1.3, 1 + 0.004 * roundsSinceBreak);
+        return speed * mood * fatigue;
+    }
+
+    // ------------------------------------------------------------------ taps
+    /** A tap point inside a box of half-size (hw, hh) around (cx, cy). */
     public int[] point(int cx, int cy, float hw, float hh) {
         if (!on()) return new int[]{cx, cy};
-        float maxX = hw * cfg.jitterPct / 100f, maxY = hh * cfg.jitterPct / 100f;
-        float dx = clamp((float) rnd.nextGaussian() * maxX / 2f, -maxX, maxX);
-        float dy = clamp((float) rnd.nextGaussian() * maxY / 2f, -maxY, maxY);
-        return new int[]{Math.round(cx + dx), Math.round(cy + dy)};
+        float lim = cfg.jitterPct / 100f;
+        boolean sloppy = rnd.nextInt(100) < 4;
+        float sd = (sloppy ? 0.45f : 0.22f) * spread * lim;
+        float fx = biasX + (float) rnd.nextGaussian() * sd;
+        float fy = biasY + (float) rnd.nextGaussian() * sd;
+        float max = sloppy ? 0.8f : lim;
+        fx = clamp(fx, -max, max);
+        fy = clamp(fy, -max, max);
+        return new int[]{Math.round(cx + fx * hw), Math.round(cy + fy * hh)};
     }
 
     /** How long the finger stays down, ms. */
     public int pressMs() {
         if (!on()) return 40;
-        return range(cfg.pressMinMs, cfg.pressMaxMs);
+        long v = logNormal(pressMedian * Math.sqrt(tempo()), 0.28, cfg.pressMinMs, cfg.pressMaxMs);
+        return (int) v;
     }
 
-    /** Small slide while pressed (px), well under Android's touch slop so it still counts as a tap. */
+    /** Small slide while pressed, px (kept under Android's touch slop so it is still a tap). */
     public int[] drift() {
         if (!on() || cfg.driftPx <= 0) return new int[]{0, 0};
-        return new int[]{rnd.nextInt(2 * cfg.driftPx + 1) - cfg.driftPx, rnd.nextInt(2 * cfg.driftPx + 1) - cfg.driftPx};
+        double mag = Math.min(cfg.driftPx, Math.abs(rnd.nextGaussian()) * cfg.driftPx / 2.0);
+        double ang = rnd.nextDouble() * 2 * Math.PI;
+        return new int[]{(int) Math.round(Math.cos(ang) * mag), (int) Math.round(Math.sin(ang) * mag)};
     }
 
-    /** Gap before tapping the same tile again. */
+    /** Gap before tapping the same tile again (a rhythm; faster than moving). */
     public long gapSameTile() {
         if (!on()) return cfg.tapDelayMs;
-        return logNormal(cfg.tapDelayMs, 0.30, Math.max(150, cfg.tapDelayMs / 2), cfg.tapDelayMs * 3L);
+        return logNormal(cfg.tapDelayMs * 0.85 * tempo(), 0.22, Math.max(160, cfg.tapDelayMs / 2), cfg.tapDelayMs * 4L);
     }
 
-    /** Gap before moving to the next tile (finger travel + looking). */
-    public long gapNextTile() {
+    /** Accidental double tap: second touch right after the first. */
+    public long bounceGap() { return range(55, 120); }
+
+    /**
+     * Gap before moving to another tile: a base gap plus Fitts-style travel time that grows with
+     * distance, and now and then a hesitation.
+     */
+    public long gapMove(Board b, int fromCell, int toCell) {
         if (!on()) return cfg.tapDelayMs;
-        return gapSameTile() + range(cfg.moveMinMs, cfg.moveMaxMs);
+        double dist = 0;
+        if (fromCell >= 0) {
+            int dr = fromCell / b.cols - toCell / b.cols, dc = fromCell % b.cols - toCell % b.cols;
+            dist = Math.hypot(dr, dc);   // in tiles
+        }
+        double fitts = (60 + 120 * Math.log(1 + dist) / Math.log(2)) * tempo();
+        long gap = logNormal(cfg.tapDelayMs * tempo(), 0.25, 150, cfg.tapDelayMs * 5L) + Math.round(fitts);
+        if (rnd.nextInt(100) < cfg.hesitationPct) gap += range(700, 3000);
+        return gap;
     }
 
-    /** "Reading the board" pause before the first tap of a new puzzle. */
-    public long thinkPause() {
+    /** Pause before going back to fix something (noticing the mistake). */
+    public long noticePause() {
         if (!on()) return 0;
-        return range(cfg.thinkMinMs, cfg.thinkMaxMs);
+        return logNormal(450 * tempo(), 0.4, 150, 2500);
+    }
+
+    /** "Reading the board" pause before the first tap; longer for harder boards. */
+    public long thinkPause(int neededTaps) {
+        if (!on()) return 0;
+        double difficulty = Math.min(1.0, neededTaps / 25.0);
+        double median = cfg.thinkMinMs + (cfg.thinkMaxMs - cfg.thinkMinMs) * (0.25 + 0.75 * difficulty);
+        return logNormal(median * tempo(), 0.30, cfg.thinkMinMs / 2, cfg.thinkMaxMs * 2L);
     }
 
     /** Reaction time before pressing the replay button. */
     public long reactionPause() {
         if (!on()) return 0;
-        return range(cfg.reactMinMs, cfg.reactMaxMs);
+        double median = (cfg.reactMinMs + cfg.reactMaxMs) / 2.0;
+        return logNormal(median * tempo(), 0.35, cfg.reactMinMs / 2, cfg.reactMaxMs * 2L);
     }
 
-    /** Extra pause before going back to fix something (noticing the mistake). */
-    public long noticePause() {
-        if (!on()) return 0;
-        return range(250, 900);
+    /** A rare long pause during a round (phone notification, looking away). 0 if none. */
+    public long distraction() {
+        if (!on() || rnd.nextInt(1000) >= cfg.distractionPct * 10) return 0;
+        return range(5000, 25000);
+    }
+
+    /** If a break is due (checked between rounds), its length in ms; otherwise 0. */
+    public long breakDue() {
+        if (!on() || !cfg.takeBreaks || roundsSinceBreak < roundsUntilBreak) return 0;
+        long ms = range(cfg.breakMinSec, cfg.breakMaxSec) * 1000L;
+        roundsSinceBreak = 0;
+        roundsUntilBreak = range(cfg.breakEveryMin, cfg.breakEveryMax);
+        mood = logNormal(1.0, 0.12);
+        return ms;
+    }
+
+    /** Screen polling interval, jittered so reaction to a new screen isn't a fixed beat. */
+    public long loopDelay() {
+        if (!on()) return cfg.loopMs;
+        return Math.round(cfg.loopMs * (0.7 + rnd.nextDouble() * 0.6));
+    }
+
+    /**
+     * Order to visit the tiles that need taps: usually along the road from the leprechaun,
+     * sometimes from the pot end, sometimes shuffled, with neighbours occasionally swapped.
+     */
+    public List<Integer> order(List<Integer> roadOrder, List<Integer> needTaps) {
+        List<Integer> out = new ArrayList<>();
+        for (int i : roadOrder) if (needTaps.contains(i)) out.add(i);
+        for (int i : needTaps) if (!out.contains(i)) out.add(i);
+        if (!on()) { Collections.sort(out); return out; }
+        int roll = rnd.nextInt(100);
+        if (roll < 20) Collections.reverse(out);
+        else if (roll < 35) Collections.shuffle(out, rnd);
+        for (int i = 0; i + 1 < out.size(); i++)
+            if (rnd.nextInt(100) < 15) Collections.swap(out, i, i + 1);
+        return out;
     }
 
     // ------------------------------------------------------------- tap plans
@@ -76,7 +182,7 @@ public class Humanizer {
     public static class Action {
         public final int cell;
         public int taps;
-        public final String kind;   // tile, overshoot, correction, wrong_tile, revisit
+        public final String kind;   // tile, overshoot, bounce, correction, wrong_tile, grass, revisit
         Action(int cell, int taps, String kind) { this.cell = cell; this.taps = taps; this.kind = kind; }
     }
 
@@ -84,19 +190,28 @@ public class Humanizer {
     public static class Plan {
         public final List<Action> actions;
         public final int[] finalMasks;
-        public final int extraTaps;
+        public final int badTaps;
         public final List<String> mistakes;
-        Plan(List<Action> a, int[] m, int extra, List<String> mk) { actions = a; finalMasks = m; extraTaps = extra; mistakes = mk; }
+        Plan(List<Action> a, int[] m, int bad, List<String> mk) { actions = a; finalMasks = m; badTaps = bad; mistakes = mk; }
+    }
+
+    /** Number of bad taps for a round: in [min, max], weighted towards fewer. */
+    int pickBadTaps(int cap) {
+        int lo = Math.max(0, cfg.badTapsMin), hi = Math.max(lo, cfg.badTapsMax);
+        double u = Math.pow(rnd.nextDouble(), 1.6);
+        int n = lo + (int) Math.floor(u * (hi - lo + 1));
+        return Math.min(Math.min(n, hi), cap);
     }
 
     /**
-     * Builds the taps for one round. Humanized first attempts get at least one mistake (except
-     * {@code perfectRoundPct}% of rounds): over-rotating a tile and going all the way round, tapping a tile
-     * that isn't on the road, or leaving a tile half-turned and coming back to it later. Every plan is
-     * simulated tap by tap and only kept if the road connects on the very last tap — the game ends the
-     * moment it connects, so a mistake scheduled after that would never happen.
+     * Builds the taps for one round. Humanized first attempts get a random number of bad taps
+     * ({@code badTapsMin..badTapsMax}, except {@code perfectRoundPct}% of rounds), plus 0–2 tiles left
+     * half-turned and finished later. Every plan is simulated tap by tap and only kept if the road connects
+     * on the very last tap: the game ends the moment it connects, so later taps would never happen.
+     *
+     * @param tapCap most bad taps allowed (from the game's "N left" counter), or Integer.MAX_VALUE
      */
-    public Plan plan(Board b, int[] turns, List<Integer> road, int tapDir, boolean firstAttempt) {
+    public Plan plan(Board b, int[] turns, List<Integer> road, int tapDir, boolean firstAttempt, int tapCap) {
         List<Integer> need = new ArrayList<>();
         for (int i = 0; i < turns.length; i++) if (taps(turns[i], tapDir) > 0) need.add(i);
         List<String> none = new ArrayList<>();
@@ -106,32 +221,31 @@ public class Humanizer {
             return new Plan(base, simulate(b, base, tapDir, false), 0, none);
         }
         boolean perfect = !firstAttempt || rnd.nextInt(1000) < cfg.perfectRoundPct * 10;
-        int wanted = 1;
-        while (wanted < 3 && rnd.nextInt(100) < cfg.extraMistakePct) wanted++;
-        java.util.Set<Integer> roadSet = new java.util.HashSet<>(road);
+        int wantBad = perfect ? 0 : pickBadTaps(Math.max(0, tapCap));
+        int wantRevisits = perfect ? 0 : rnd.nextInt(3);
+        Set<Integer> roadSet = new HashSet<>(road);
         List<Action> fallback = null;
-        for (int attempt = 0; attempt < 120; attempt++) {
-            // a fresh tile order each attempt: some orders connect a side road early whatever we do
+        for (int attempt = 0; attempt < 150; attempt++) {
+            // fresh order each attempt: some orders connect a side road early whatever we do
             List<Action> p = base(road, need, turns, tapDir);
             if (fallback == null) fallback = copy(p);
             List<String> done = new ArrayList<>();
-            int extra = 0;
-            if (!perfect) {
-                // later attempts settle for fewer mistakes, but never none
-                int want = attempt < 60 ? wanted : 1;
-                for (int m = 0; m < want; m++) {
-                    int added = addMistake(b, p, roadSet, turns, tapDir, cfg.maxExtraTaps - extra, done);
-                    if (added >= 0) extra += added;
-                }
-                if (done.isEmpty()) continue;
+            // later attempts settle for fewer bad taps
+            int target = attempt < 50 ? wantBad : attempt < 100 ? (wantBad + 1) / 2 : Math.min(wantBad, 1);
+            int bad = 0, guard = 0;
+            while (bad < target && guard++ < 40) {
+                int added = addMistake(b, p, roadSet, turns, tapDir, target - bad, done);
+                if (added <= 0) break;
+                bad += added;
             }
+            if (!perfect && bad == 0 && wantBad > 0) continue;
+            for (int r = 0; r < wantRevisits; r++) addRevisit(b, p, done);
             int[] fin = simulate(b, p, tapDir, true);
-            if (fin != null) return new Plan(p, fin, extra, done);
+            if (fin != null) return new Plan(p, fin, bad, done);
         }
         return new Plan(fallback, simulate(b, fallback, tapDir, false), 0, none);
     }
 
-    /** Taps each tile that needs it, in a humanized order, with a road tile last. */
     List<Action> base(List<Integer> road, List<Integer> need, int[] turns, int tapDir) {
         List<Action> base = new ArrayList<>();
         for (int idx : order(road, need)) base.add(new Action(idx, taps(turns[idx], tapDir), "tile"));
@@ -144,66 +258,128 @@ public class Humanizer {
         return out;
     }
 
-    /** Adds one mistake; returns the extra taps it costs, or -1 if none fitted. */
-    int addMistake(Board b, List<Action> p, java.util.Set<Integer> roadSet, int[] turns, int tapDir,
-                   int budget, List<String> done) {
-        int last = p.size() - 1;   // the final action stays final
-        int roll = rnd.nextInt(100);
-        // 1) over-rotate a tile, then go all the way round to fix it (+4 taps)
-        if (roll < 40 && budget >= 4 && last >= 1) {
+    /**
+     * Adds one mistake costing at most {@code remaining} bad taps; returns its cost (0 if none fitted).
+     * The final action always stays final.
+     */
+    int addMistake(Board b, List<Action> p, Set<Integer> roadSet, int[] turns, int tapDir, int remaining,
+                   List<String> done) {
+        int last = p.size() - 1;
+        List<Integer> offRoad = new ArrayList<>(), grass = new ArrayList<>(), settled = new ArrayList<>();
+        for (int i = 0; i < b.masks.length; i++) {
+            if (i == b.srcR * b.cols + b.srcC || i == b.dstR * b.cols + b.dstC) continue;
+            if (b.masks[i] == 0) grass.add(i);
+            else if (!roadSet.contains(i)) offRoad.add(i);
+            else if (taps(turns[i], tapDir) == 0) settled.add(i);
+        }
+        // weights per kind, only for kinds that fit
+        int wOver = remaining >= 4 && last >= 1 ? 30 : 0;
+        int wBounce = remaining >= 4 && last >= 1 ? 10 : 0;
+        int wBump = remaining >= 4 && !settled.isEmpty() ? 8 : 0;
+        int wWrong = !offRoad.isEmpty() ? 37 : 0;
+        int wGrass = !grass.isEmpty() ? 15 : 0;
+        int total = wOver + wBounce + wBump + wWrong + wGrass;
+        if (total == 0) return 0;
+        int roll = rnd.nextInt(total);
+
+        if (roll < wOver + wBounce) {
+            // over-rotate a tile (1-3 steps, or an accidental double tap), then keep going round to
+            // where it should be: always +4 taps in total
+            boolean bounce = roll >= wOver;
             int i = rnd.nextInt(last);
             Action a = p.get(i);
-            if (a.kind.equals("tile")) {
-                a.taps += 1;
-                p.add(i + 1 + rnd.nextInt(last - i), new Action(a.cell, 3, "correction"));
-                done.add("overshoot " + a.cell / b.cols + ":" + a.cell % b.cols);
-                return 4;
-            }
+            if (!a.kind.equals("tile")) return 0;
+            int over = bounce ? 1 : 1 + rnd.nextInt(3);
+            p.add(i + 1, new Action(a.cell, over, bounce ? "bounce" : "overshoot"));
+            int fixAt = i + 2 + (rnd.nextInt(100) < 70 ? 0 : rnd.nextInt(Math.max(1, last - i)));
+            p.add(Math.min(fixAt, p.size() - 1), new Action(a.cell, 4 - over, "correction"));
+            done.add((bounce ? "double tap " : "over-rotated ") + name(b, a.cell));
+            return 4;
         }
-        // 2) tap a tile that isn't on the road (+1..2), or a road tile that was already right (+4)
-        if (roll < 80 || budget < 4) {
-            List<Integer> decoys = new ArrayList<>();
-            for (int i = 0; i < b.masks.length; i++) {
-                if (b.masks[i] == 0 || roadSet.contains(i)) continue;
-                if (i == b.srcR * b.cols + b.srcC || i == b.dstR * b.cols + b.dstC) continue;
-                decoys.add(i);
-            }
-            if (!decoys.isEmpty() && budget >= 1) {
-                int cell = decoys.get(rnd.nextInt(decoys.size()));
-                int n = budget >= 2 && rnd.nextInt(100) < 30 ? 2 : 1;
-                p.add(rnd.nextInt(last + 1), new Action(cell, n, "wrong_tile"));
-                done.add("wrong tile " + cell / b.cols + ":" + cell % b.cols);
-                return n;
-            }
-            List<Integer> settled = new ArrayList<>();
-            for (int cell : roadSet) if (taps(turns[cell], tapDir) == 0) settled.add(cell);
-            if (!settled.isEmpty() && budget >= 4) {
-                int cell = settled.get(rnd.nextInt(settled.size()));
-                int j = rnd.nextInt(last + 1);
-                p.add(j, new Action(cell, 1, "wrong_tile"));
-                p.add(j + 1 + rnd.nextInt(p.size() - 1 - j), new Action(cell, 3, "correction"));
-                done.add("bumped correct tile " + cell / b.cols + ":" + cell % b.cols);
-                return 4;
-            }
+        roll -= wOver + wBounce;
+        if (roll < wBump) {
+            // bump a road tile that was already right, then turn it the rest of the way round (+4)
+            int cell = nearPick(b, settled, p);
+            int n = 1 + rnd.nextInt(3);
+            int j = insertNear(b, p, cell, last);
+            p.add(j, new Action(cell, n, "wrong_tile"));
+            p.add(Math.min(j + 1 + rnd.nextInt(2), p.size() - 1), new Action(cell, 4 - n, "correction"));
+            done.add("bumped " + name(b, cell));
+            return 4;
         }
-        // 3) leave a tile half-turned and come back to it later (no extra taps)
+        roll -= wBump;
+        if (roll < wWrong) {
+            // tap a road tile that isn't part of the route, near where we're working (+1..3)
+            int cell = nearPick(b, offRoad, p);
+            int n = Math.min(remaining, 1 + (rnd.nextInt(100) < 35 ? 1 : 0) + (rnd.nextInt(100) < 10 ? 1 : 0));
+            p.add(insertNear(b, p, cell, last), new Action(cell, n, "wrong_tile"));
+            done.add("wrong tile " + name(b, cell) + (n > 1 ? " x" + n : ""));
+            return n;
+        }
+        // tap a grass square next to the road (+1)
+        int cell = nearPick(b, grass, p);
+        p.add(insertNear(b, p, cell, last), new Action(cell, 1, "grass"));
+        done.add("missed onto grass " + name(b, cell));
+        return 1;
+    }
+
+    /** Splits a multi-tap tile so part of it is finished later (no extra taps). */
+    void addRevisit(Board b, List<Action> p, List<String> done) {
+        int last = p.size() - 1;
         List<Integer> multi = new ArrayList<>();
         for (int i = 0; i < last; i++) if (p.get(i).taps >= 2 && p.get(i).kind.equals("tile")) multi.add(i);
-        if (!multi.isEmpty()) {
-            int i = multi.get(rnd.nextInt(multi.size()));
-            Action a = p.get(i);
-            int first = 1 + rnd.nextInt(a.taps - 1);
-            p.add(i + 1 + rnd.nextInt(last - i), new Action(a.cell, a.taps - first, "revisit"));
-            a.taps = first;
-            done.add("came back to " + a.cell / b.cols + ":" + a.cell % b.cols);
-            return 0;
-        }
-        return -1;
+        if (multi.isEmpty()) return;
+        int i = multi.get(rnd.nextInt(multi.size()));
+        Action a = p.get(i);
+        int first = 1 + rnd.nextInt(a.taps - 1);
+        p.add(i + 1 + rnd.nextInt(last - i), new Action(a.cell, a.taps - first, "revisit"));
+        a.taps = first;
+        done.add("came back to " + name(b, a.cell));
     }
+
+    /** Picks a candidate cell, favouring ones close to the tiles in the plan (mistakes happen where you look). */
+    int nearPick(Board b, List<Integer> cands, List<Action> p) {
+        double[] w = new double[cands.size()];
+        double sum = 0;
+        for (int k = 0; k < cands.size(); k++) {
+            double d = minDist(b, cands.get(k), p);
+            w[k] = 1.0 / (0.5 + d * d);
+            sum += w[k];
+        }
+        double x = rnd.nextDouble() * sum;
+        for (int k = 0; k < w.length; k++) if ((x -= w[k]) <= 0) return cands.get(k);
+        return cands.get(cands.size() - 1);
+    }
+
+    /** Insertion index right after the planned tile nearest to {@code cell} (70%), else anywhere before the end. */
+    int insertNear(Board b, List<Action> p, int cell, int last) {
+        if (rnd.nextInt(100) < 70) {
+            int best = -1;
+            double bd = 1e9;
+            for (int i = 0; i < last; i++) {
+                double d = dist(b, p.get(i).cell, cell);
+                if (d < bd) { bd = d; best = i; }
+            }
+            if (best >= 0) return best + 1;
+        }
+        return rnd.nextInt(last + 1);
+    }
+
+    static double minDist(Board b, int cell, List<Action> p) {
+        double m = 1e9;
+        for (Action a : p) m = Math.min(m, dist(b, a.cell, cell));
+        return m;
+    }
+
+    static double dist(Board b, int a, int c) {
+        return Math.hypot(a / b.cols - c / b.cols, a % b.cols - c % b.cols);
+    }
+
+    static String name(Board b, int cell) { return cell / b.cols + ":" + cell % b.cols; }
 
     /**
      * Applies the plan to a copy of the board. With {@code strict}, returns null if the road connects
-     * before the final tap or isn't connected after it.
+     * before the final tap or isn't connected after it. Grass taps change nothing.
      */
     static int[] simulate(Board b, List<Action> plan, int tapDir, boolean strict) {
         int[] m = b.masks.clone();
@@ -212,7 +388,7 @@ public class Humanizer {
         int done = 0;
         for (Action a : plan)
             for (int t = 0; t < a.taps; t++) {
-                m[a.cell] = tapDir >= 0 ? Solver.rotCw(m[a.cell]) : Solver.rotCcw(m[a.cell]);
+                if (m[a.cell] != 0) m[a.cell] = tapDir >= 0 ? Solver.rotCw(m[a.cell]) : Solver.rotCcw(m[a.cell]);
                 done++;
                 if (strict && done < total && connected(b, m)) return null;
             }
@@ -230,30 +406,23 @@ public class Humanizer {
 
     static int taps(int cwTurns, int tapDir) { return tapDir >= 0 ? cwTurns : (4 - cwTurns) % 4; }
 
-    /**
-     * Order to visit the tiles that need taps. Humanized: usually along the road from the
-     * leprechaun, sometimes from the pot end, sometimes shuffled, with a few neighbours swapped.
-     */
-    public List<Integer> order(List<Integer> roadOrder, List<Integer> needTaps) {
-        List<Integer> out = new ArrayList<>();
-        for (int i : roadOrder) if (needTaps.contains(i)) out.add(i);
-        for (int i : needTaps) if (!out.contains(i)) out.add(i);
-        if (!on()) { Collections.sort(out); return out; }
-        int roll = rnd.nextInt(100);
-        if (roll < 20) Collections.reverse(out);
-        else if (roll < 35) Collections.shuffle(out, rnd);
-        for (int i = 0; i + 1 < out.size(); i++)
-            if (rnd.nextInt(100) < 15) Collections.swap(out, i, i + 1);
-        return out;
-    }
-
+    // ---------------------------------------------------------------- helpers
     int range(int lo, int hi) {
         if (hi <= lo) return lo;
         return lo + rnd.nextInt(hi - lo + 1);
     }
 
+    double logNormal(double median, double sigma) { return median * Math.exp(rnd.nextGaussian() * sigma); }
+
+    /**
+     * Log-normal sample kept inside [lo, hi] with soft edges: values past a bound land a random amount
+     * inside it instead of piling up on the bound (a pile-up at one exact value is itself a tell).
+     */
     long logNormal(double median, double sigma, long lo, long hi) {
-        long v = Math.round(median * Math.exp(rnd.nextGaussian() * sigma));
+        long v = Math.round(logNormal(median, sigma));
+        long room = Math.max(1, (hi - lo) / 5);
+        if (v < lo) v = lo + (long) (rnd.nextDouble() * Math.min(room, Math.max(1, lo / 3)));
+        if (v > hi) v = hi - (long) (rnd.nextDouble() * room);
         return Math.max(lo, Math.min(hi, v));
     }
 
