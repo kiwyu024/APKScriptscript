@@ -230,14 +230,45 @@ public class Humanizer {
     /** For the settings screen / tests. */
     public int cleanPctPublic(Board b, int neededTaps) { return cleanPct(b, neededTaps); }
 
-    /** Wrong taps for a round: few on clean rounds, more on messy ones (more on bigger boards). */
+    /**
+     * Wrong taps for a round, as a weighted pick so the counts cluster around a typical value and the
+     * maximum stays possible but rare:
+     *   clean rounds - 4x4: 0-2, mostly 1;  bigger boards: 1-3, mostly 2-3
+     *   messy rounds - from 3 (4x4) or 4 up to 5 / 8 / 12 / 15 (4x4 / 5x5 / 6x6 / 7x7); most likely the
+     *                  lowest count on 4x4-6x6 (falling off towards the max), 5-8 on 7x7
+     * The clean/messy split (cleanPct) decides how often each happens, so 4x4 is mostly 1, 5x5/6x6
+     * mostly 2-3, and 7x7 mostly 5-8.
+     */
     int pickWrongTaps(Board b, boolean clean, int cap) {
-        int n = Math.max(4, Math.min(7, b.rows));
-        int lo, hi;
-        if (clean) { lo = n == 4 ? 0 : 1; hi = n == 4 ? 2 : 3; }
-        else { lo = 4; hi = n == 4 ? 5 : n == 5 ? 8 : n == 6 ? 12 : 15; }
-        int w = lo + rnd.nextInt(hi - lo + 1);                // any amount in the range, evenly
-        return Math.max(0, Math.min(Math.min(w, hi), cap));
+        double[] w = wrongTapWeights(b.rows, clean);
+        double sum = 0;
+        for (double v : w) sum += v;
+        double x = rnd.nextDouble() * sum;
+        int pick = 0;
+        for (int k = 0; k < w.length; k++) { if ((x -= w[k]) <= 0) { pick = k; break; } pick = k; }
+        return Math.max(0, Math.min(pick, cap));
+    }
+
+    /** Relative weight of each wrong-tap count (index = count) for a clean or messy round on an n x n board. */
+    public static double[] wrongTapWeights(int boardSize, boolean clean) {
+        int n = Math.max(4, Math.min(7, boardSize));
+        if (clean) {
+            if (n == 4) return new double[]{0.30, 0.45, 0.25};                    // 0-2, mostly 1
+            if (n == 7) return new double[]{0, 0.30, 0.40, 0.30};                  // 1-3
+            return new double[]{0, 0.20, 0.42, 0.38};                              // 1-3, mostly 2-3
+        }
+        int max = n == 4 ? 5 : n == 5 ? 8 : n == 6 ? 12 : 15;
+        int lo = n == 4 ? 3 : 4;                               // 4x4 messy starts at 3 so there's no gap after 2
+        int modeLo = n == 7 ? 5 : lo, modeHi = n == 7 ? 8 : lo;
+        double atMax = 0.06;                                   // the max is ~6% as likely as the typical count
+        double decay = Math.pow(atMax, 1.0 / Math.max(1, max - modeHi));
+        double[] w = new double[max + 1];
+        for (int k = lo; k <= max; k++) {
+            if (k < modeLo) w[k] = Math.pow(0.6, modeLo - k);
+            else if (k <= modeHi) w[k] = 1;
+            else w[k] = Math.pow(decay, k - modeHi);
+        }
+        return w;
     }
 
     /**

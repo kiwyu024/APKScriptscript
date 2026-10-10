@@ -18,7 +18,7 @@ All measurements are proportional to the screen and board size.
 
 ## Install
 
-1. Copy `dist/TapAssist-0.8.2.apk` to the phone and install it (allow installs from that app when asked).
+1. Copy `dist/TapAssist-0.8.3.apk` to the phone and install it (allow installs from that app when asked).
 2. Open **Tap Assist** → **App info** → ⋮ → **Allow restricted settings**. Android 13+ requires this before a
    sideloaded app can use accessibility.
 3. **Accessibility settings** → Installed apps → **Tap Assist** → On.
@@ -32,19 +32,19 @@ for the road, the replay button position and the X detector score. **Save debug 
 
 Each puzzle is either **clean** (a few wrong taps) or **messy** (more). The clean chance falls with board size:
 
-| Board | Clean chance | Clean round | Messy round |
-|---|---|---|---|
-| 4×4 | 97% | 0–2 wrong taps | 4–5 wrong taps |
-| 5×5 | 80% | 1–3 | 4–8 |
-| 6×6 | 60% | 1–3 | 4–12 |
-| 7×7 | 10% | 1–3 | 4–15 |
+| Board | Clean chance | Wrong taps per round (most likely → rare) |
+|---|---|---|
+| 4×4 | 97% | mostly **1** (0 29%, 1 44%, 2 24%, 3 2.3%, 4 0.6%, 5 0.1%) |
+| 5×5 | 80% | mostly **2–3** (64%), 1 16%, then 4 → 8 getting rarer (8: 0.6%) |
+| 6×6 | 60% | mostly **2–3** (48%), 1 12%, then 4 → 12 getting rarer (12: 0.7%) |
+| 7×7 | 10% | mostly **5–8** (55%), 1–3 10%, 4 8%, then 9 → 15 getting rarer (15: 0.8%) |
 
-The chance is nudged down for boards that need more turns than usual for their size, and up for easier ones (only
-slightly near 100%). Within a clean or messy round the number of wrong taps is picked evenly across its range, so how
-messy a round gets varies. Wrong taps go on road tiles that aren't on the route, on grass, or bump a correct tile and fix
-it. On top of that, the correct taps **over-rotate** at a rate picked per round (0–10%, averaging 5%): the right tile
-goes one step too far, then on round to where it should be (+4 taps, or +2 for a straight piece, which repeats every
-two turns).
+The clean chance (wrong taps within 0–2 on 4×4, 1–3 on bigger boards) is nudged down for boards that need more turns
+than usual for their size, and up for easier ones (only slightly near 100%). Wrong taps go on road tiles that aren't
+on the route, on grass, or bump a correct tile and fix it. On top of that, the correct taps **over-rotate** at a rate
+picked per round (0–10%, averaging 5%): the right tile goes one step too far, then on round to where it should be
+(+4 taps, or +2 for a straight piece, which repeats every two turns). Plans are simulated so the road connects on the
+final tap. Retries after a misread are clean. The clean chances and over-rotation rate are in Settings → Mistakes.
 
 **Straight-line maps** (leprechaun and gold in the same row or column with only straight pieces between) never get a
 wrong tile. 95% of those rounds are spot on, and 5% over-rotate one tile and fix it. A map that needs just one tile
