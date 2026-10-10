@@ -37,7 +37,9 @@ public class Config {
     public int moveMinMs = 80, moveMaxMs = 380;     // extra gap when moving to another tile
     public int thinkMinMs = 700, thinkMaxMs = 2600; // before the first tap of a puzzle
     public int reactMinMs = 600, reactMaxMs = 2200; // before tapping the replay button
-    public int mistakePct = 0;       // chance per tile of a deliberate extra full turn (costs 4 taps)
+    public int perfectRoundPct = 1;  // humanized rounds with no mistake at all
+    public int extraMistakePct = 30; // chance of each further mistake in a round (max 3)
+    public int maxExtraTaps = 8;     // cap on taps spent on mistakes per round
     public boolean logTaps = true;
 
     /** Ads: off by default; turn on only in builds that serve AdMob test ads. */
@@ -73,7 +75,9 @@ public class Config {
         k.moveMinMs = p.getInt("moveMinMs", k.moveMinMs); k.moveMaxMs = p.getInt("moveMaxMs", k.moveMaxMs);
         k.thinkMinMs = p.getInt("thinkMinMs", k.thinkMinMs); k.thinkMaxMs = p.getInt("thinkMaxMs", k.thinkMaxMs);
         k.reactMinMs = p.getInt("reactMinMs", k.reactMinMs); k.reactMaxMs = p.getInt("reactMaxMs", k.reactMaxMs);
-        k.mistakePct = p.getInt("mistakePct", k.mistakePct);
+        k.perfectRoundPct = p.getInt("perfectRoundPct", k.perfectRoundPct);
+        k.extraMistakePct = p.getInt("extraMistakePct", k.extraMistakePct);
+        k.maxExtraTaps = p.getInt("maxExtraTaps", k.maxExtraTaps);
         k.logTaps = p.getBoolean("logTaps", k.logTaps);
         k.handleAds = p.getBoolean("handleAds", k.handleAds);
         k.gamePackage = p.getString("gamePackage", "");
@@ -97,7 +101,8 @@ public class Config {
                 .putInt("moveMinMs", moveMinMs).putInt("moveMaxMs", moveMaxMs)
                 .putInt("thinkMinMs", thinkMinMs).putInt("thinkMaxMs", thinkMaxMs)
                 .putInt("reactMinMs", reactMinMs).putInt("reactMaxMs", reactMaxMs)
-                .putInt("mistakePct", mistakePct).putBoolean("logTaps", logTaps)
+                .putInt("perfectRoundPct", perfectRoundPct)
+                .putInt("extraMistakePct", extraMistakePct).putInt("maxExtraTaps", maxExtraTaps).putBoolean("logTaps", logTaps)
                 .putBoolean("handleAds", handleAds)
                 .putString("gamePackage", gamePackage)
                 .putBoolean("debugDump", debugDump)

@@ -82,7 +82,11 @@ public class MainActivity extends Activity {
         num("thinkMaxMs", "Pause before solving, max ms", cfg.thinkMaxMs);
         num("reactMinMs", "Pause before tapping replay, min ms", cfg.reactMinMs);
         num("reactMaxMs", "Pause before tapping replay, max ms", cfg.reactMaxMs);
-        num("mistakePct", "Mistake chance per tile, % (each costs 4 extra taps)", cfg.mistakePct);
+        num("perfectRoundPct", "Rounds with no mistake, % (others get at least one)", cfg.perfectRoundPct);
+        num("extraMistakePct", "Chance of each further mistake in a round, % (max 3)", cfg.extraMistakePct);
+        num("maxExtraTaps", "Max extra taps spent on mistakes per round", cfg.maxExtraTaps);
+        note("Mistakes: over-rotating a tile and going round again (+4 taps), tapping a tile off the road (+1-2), " +
+                "or leaving a tile half-turned and coming back later (+0).");
         logTaps = check("Log every tap to Download/TerraMineBot (CSV, saved on stop)", cfg.logTaps);
 
         title("Replay");
@@ -136,7 +140,9 @@ public class MainActivity extends Activity {
             cfg.moveMinMs = i("moveMinMs"); cfg.moveMaxMs = i("moveMaxMs");
             cfg.thinkMinMs = i("thinkMinMs"); cfg.thinkMaxMs = i("thinkMaxMs");
             cfg.reactMinMs = i("reactMinMs"); cfg.reactMaxMs = i("reactMaxMs");
-            cfg.mistakePct = i("mistakePct");
+            cfg.perfectRoundPct = i("perfectRoundPct");
+            cfg.extraMistakePct = i("extraMistakePct");
+            cfg.maxExtraTaps = i("maxExtraTaps");
             cfg.logTaps = logTaps.isChecked();
             cfg.handleAds = handleAds.isChecked();
             cfg.debugDump = debug.isChecked();

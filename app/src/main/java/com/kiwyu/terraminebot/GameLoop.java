@@ -288,29 +288,32 @@ public class GameLoop implements Runnable {
             return;
         }
 
-        int[] target = masks.clone();
-        java.util.List<Integer> need = new java.util.ArrayList<>();
-        for (int i = 0; i < masks.length; i++) {
-            target[i] = Solver.rotCw(masks[i], turns[i]);
-            if (solver.taps(turns[i]) > 0) need.add(i);
+        if (solver.bestTaps() == 0) {
+            lastTarget = masks.clone();
+            svc.status("Road already connected — waiting");
+            return;
         }
+        Humanizer.Plan plan = human.plan(board, turns, solver.road(), cfg.tapDir, attempts == 1);
+        int[] target = plan.finalMasks;
         if (attempts == 1) {
             long think = human.thinkPause();
             if (think > 0) { svc.status("Reading the board…"); AutoPlayerService.sleep(think); }
         }
-        svc.status("Solving: " + solver.bestTaps() + " taps" + (cfg.humanize ? " (humanized)" : ""));
+        svc.status("Solving: " + solver.bestTaps() + " taps"
+                + (plan.mistakes.isEmpty() ? "" : " + " + plan.extraTaps + " (" + String.join(", ", plan.mistakes) + ")"));
         float hw = board.pitchX / 2f, hh = board.pitchY / 2f;
         boolean first = true;
-        for (int idx : human.order(solver.road(), need)) {
+        for (Humanizer.Action act : plan.actions) {
             if (!running) break;
-            int r = idx / board.cols, c = idx % board.cols;
-            int k = solver.taps(turns[idx]);
-            if (human.mistake()) k += 4;   // a full extra turn ends where it would have anyway
-            if (!first) AutoPlayerService.sleep(human.gapNextTile());
+            int r = act.cell / board.cols, c = act.cell % board.cols;
+            if (!first) {
+                AutoPlayerService.sleep(human.gapNextTile());
+                if (act.kind.equals("correction") || act.kind.equals("revisit")) AutoPlayerService.sleep(human.noticePause());
+            }
             first = false;
-            for (int t = 0; t < k && running; t++) {
+            for (int t = 0; t < act.taps && running; t++) {
                 if (t > 0) AutoPlayerService.sleep(human.gapSameTile());
-                tap(board.cx(c), board.cy(r), hw, hh, "tile", r + ":" + c);
+                tap(board.cx(c), board.cy(r), hw, hh, act.kind, r + ":" + c);
             }
         }
         AutoPlayerService.sleep(cfg.tapDelayMs);

@@ -18,7 +18,7 @@ All measurements are proportional to the screen and board size.
 
 ## Install
 
-1. Copy `dist/TerraMineBot-0.4.apk` to the phone and install it (allow installs from that app when asked).
+1. Copy `dist/TerraMineBot-0.5.apk` to the phone and install it (allow installs from that app when asked).
 2. Open **TerraMine Bot** → **App info** → ⋮ → **Allow restricted settings**. Android 13+ requires this before a
    sideloaded app can use accessibility.
 3. **Accessibility settings** → Installed apps → **TerraMine Bot** → On.
@@ -38,13 +38,23 @@ Settings → **Humanize taps** randomises:
 - a "reading the board" pause before the first tap (0.7–2.6 s) and a reaction pause before Play Again
 - tile order (usually along the road from the leprechaun, sometimes from the pot, sometimes shuffled, with
   neighbouring tiles occasionally swapped)
-- optional deliberate mistakes (a full extra turn on a tile; costs 4 taps)
+- mistakes: every humanized round makes at least one, except "Rounds with no mistake" (default 1%).
+  Each further mistake has a 30% chance (max 3, max 8 extra taps per round). The kinds are:
+  - over-rotating a tile one step, then going all the way round to fix it (+4 taps)
+  - tapping a tile that isn't on the road once or twice (+1–2), or bumping a road tile that was already right
+    and turning it back (+4)
+  - leaving a tile half-turned and coming back to finish it later (+0)
+
+  Each round's taps are planned up front and simulated tap by tap. A plan is used only if the road connects on
+  the very last tap, because the game ends the moment it connects and later "mistakes" would never happen.
+  Retries after a misread are played without mistakes.
 
 With humanize off, taps are exact tile centres, 40 ms long, at fixed intervals, in row order. This gives a
 clean "obvious bot" baseline to compare against.
 
 **Log every tap** writes `Download/TerraMineBot/taps_<time>.csv` when the bot stops
-(`epoch_ms,x,y,press_ms,drift_x,drift_y,kind,detail`), so you can line it up with your anti-cheat telemetry.
+(`epoch_ms,x,y,press_ms,drift_x,drift_y,kind,detail`; kind is `tile`, `overshoot`, `correction`,
+`wrong_tile`, `revisit`, `replay` or `ad_close`), so you can line it up with your anti-cheat telemetry.
 
 ## Build
 
