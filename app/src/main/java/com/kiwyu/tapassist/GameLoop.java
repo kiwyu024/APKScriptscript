@@ -27,6 +27,9 @@ public class GameLoop implements Runnable {
     int adFallbackTries = 0;
     long unknownSince = 0;
     Rect lastBoardRect;        // where the board was last seen (to keep the panel out of screenshots)
+    int spawnR = -1, spawnC = -1;   // leprechaun cell of the puzzle being solved
+    int unsolvedStreak = 0;
+    long completeSince = 0;    // when the board first read as complete without the game reacting
 
     int[] lastTarget;          // masks we expect after our taps
     boolean solvedWaiting;     // board solved; wait for the result screen
@@ -106,8 +109,12 @@ public class GameLoop implements Runnable {
             }
             lastBoardRect = new Rect(board.left, board.top, board.left + board.size, board.top + board.size);
         }
+        if (board != null) Vision.read(f, board, cfg);
+        // A puzzle in progress (leprechaun at its spawn, road not connected) is never a result screen,
+        // whatever the accessibility tree says: the game can keep a hidden Play Again button around.
+        boolean inPlay = board != null && board.ready() && !Humanizer.connected(board, board.masks);
         boolean adFg = svc.adInForeground();
-        int[] replay = adFg ? null : findReplay(f, board);
+        int[] replay = adFg || inPlay ? null : findReplay(f, board);
 
         if (adFg || (board == null && replay == null && (now < expectAdUntil || adStart > 0))) {
             handleAd(f, now, adFg);
@@ -130,6 +137,7 @@ public class GameLoop implements Runnable {
             if (brk > 0 && !restFor(brk)) return;
             AutoPlayerService.sleep(human.reactionPause());
             svc.status("Tapping " + (replay[4] == 1 ? "Watch Ad" : "Play Again") + " (solved " + solvedCount + ")");
+            log.event("replay tap " + (replay[4] == 1 ? "watch_ad" : "play_again") + " via " + (replay.length > 5 && replay[5] == 1 ? "accessibility" : "colour"));
             tap(replay[0], replay[1], replay[2] * 0.8f, replay[3] * 0.8f, "replay", replay[4] == 1 ? "watch_ad" : "play_again");
             lastReplayTap = System.currentTimeMillis();
             expectAdUntil = lastReplayTap + 12000;
@@ -143,10 +151,23 @@ public class GameLoop implements Runnable {
 
         if (board != null) {
             unknownSince = 0;
-            Vision.read(f, board, cfg);
             if (solvedWaiting && now - solvedAt < 25000) {
-                svc.status("Solved — waiting for result (" + solvedCount + " total)");
-                return;
+                // if the same puzzle is clearly still unsolved, the "solved" call was wrong
+                boolean sameSpawn = board.srcR == spawnR && board.srcC == spawnC;
+                if (inPlay && sameSpawn) {
+                    if (++unsolvedStreak >= 2) {
+                        solvedWaiting = false;
+                        solvedCount = Math.max(0, solvedCount - 1);
+                        lastTarget = null;
+                        log.event("solved call was wrong: board still unsolved, re-solving");
+                        svc.status("Not actually solved — continuing");
+                    }
+                    if (solvedWaiting) return;
+                } else {
+                    unsolvedStreak = 0;
+                    svc.status("Solved — waiting for result (" + solvedCount + " total)");
+                    return;
+                }
             }
             solvedWaiting = false;
             if (!board.ready()) {
@@ -218,7 +239,9 @@ public class GameLoop implements Runnable {
                     + (n.getContentDescription() == null ? "" : n.getContentDescription().toString());
             String l = t.toLowerCase(java.util.Locale.US);
             int type = l.contains("watch") || l.contains("ad ") || l.contains("level") ? 1 : 0;
-            return new int[]{r.centerX(), r.centerY(), r.width() / 2, r.height() / 2, type};
+            // the node must actually be drawn as a button on screen (hidden elements still show up in the tree)
+            if (!Vision.looksLikeButton(f, r)) continue;
+            return new int[]{r.centerX(), r.centerY(), r.width() / 2, r.height() / 2, type, 1};
         }
         // Both result screens still show the board (in place, or moved up on level-up), so a colour
         // match is only trusted below a visible board — this keeps yellow/orange ads from matching.
@@ -290,9 +313,20 @@ public class GameLoop implements Runnable {
     void solve(Frame f, Board board) {
         int[] masks = board.masks;
         if (lastTarget != null && Arrays.equals(masks, lastTarget)) {
+            if (completeSince == 0) completeSince = System.currentTimeMillis();
+            if (System.currentTimeMillis() - completeSince > 10000) {
+                log.event("board reads complete for 10s but the game hasn't reacted");
+                String where = DebugDump.save(svc, f, board, "complete but not accepted");
+                svc.status("Road looks complete but the game hasn't accepted it — saved " + where);
+                lastTarget = null;
+                completeSince = 0;
+                AutoPlayerService.sleep(3000);
+                return;
+            }
             svc.status("Road complete — waiting (" + solvedCount + " solved)");
             return;
         }
+        completeSince = 0;
         if (cfg.debugDump && !dumped) {
             DebugDump.save(svc, f, board, "read");
             dumped = true;
@@ -317,9 +351,12 @@ public class GameLoop implements Runnable {
 
         if (solver.bestTaps() == 0) {
             lastTarget = masks.clone();
+            completeSince = System.currentTimeMillis();
             svc.status("Road already connected — waiting");
             return;
         }
+        spawnR = board.srcR;
+        spawnC = board.srcC;
         if (attempts == 1) human.newRound();
         int left = cfg.humanize ? tapsLeft() : -1;
         int cap = left < 0 ? Integer.MAX_VALUE : left - solver.bestTaps() - cfg.tapsLeftMargin;
@@ -357,14 +394,31 @@ public class GameLoop implements Runnable {
         lastTarget = target;
         AutoPlayerService.sleep(cfg.settleMs);
 
-        Frame check = lastBoardRect != null && intersectsPanel() ? svc.screenshotWithoutPanel() : svc.screenshot();
-        if (check == null) return;
-        Board b2 = Vision.findBoard(check, cfg);
-        if (b2 == null) { markSolved(); return; }   // screen already moved on
-        Vision.read(check, b2, cfg);
-        Solver verify = new Solver(b2, cfg.tapDir);
-        if (b2.ready() && verify.solve() != null && verify.bestTaps() == 0) markSolved();
-        else if (!b2.ready()) markSolved();          // leprechaun started walking
+        verify(board);
+    }
+
+    /**
+     * After tapping: only call the puzzle solved on real evidence — the road reads as connected, the
+     * leprechaun has left its spawn, or a result button is showing. A missing leprechaun alone (detection
+     * hiccup) is not enough; re-check a few times instead.
+     */
+    void verify(Board before) {
+        for (int i = 0; i < 3 && running; i++) {
+            if (i > 0) AutoPlayerService.sleep(600);
+            Frame check = lastBoardRect != null && intersectsPanel() ? svc.screenshotWithoutPanel() : svc.screenshot();
+            if (check == null) continue;
+            Board b2 = Vision.findBoard(check, cfg);
+            if (b2 != null) Vision.read(check, b2, cfg);
+            if (b2 != null && b2.ready()) {
+                boolean moved = b2.srcR != spawnR || b2.srcC != spawnC;
+                if (Humanizer.connected(b2, b2.masks)) { markSolved("road connected"); return; }
+                if (moved) { markSolved("leprechaun walking"); return; }
+                log.event("after taps the road is not connected yet");
+                return;   // still unsolved: the next tick re-solves
+            }
+            if (findReplay(check, b2) != null) { markSolved("result screen"); return; }
+        }
+        log.event("couldn't confirm the result after tapping; carrying on");
     }
 
     boolean intersectsPanel() {
@@ -372,7 +426,8 @@ public class GameLoop implements Runnable {
         return p != null && Rect.intersects(p, lastBoardRect);
     }
 
-    void markSolved() {
+    void markSolved(String why) {
+        log.event("solved (" + why + ")");
         solvedCount++;
         attempts = 0;
         solvedWaiting = true;

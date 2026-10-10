@@ -441,7 +441,7 @@ public class Humanizer {
         return m;
     }
 
-    static boolean connected(Board b, int[] masks) {
+    public static boolean connected(Board b, int[] masks) {
         Board c = new Board(b.left, b.top, b.size, b.size, b.rows, b.cols);
         c.masks = masks;
         c.srcR = b.srcR; c.srcC = b.srcC; c.dstR = b.dstR; c.dstC = b.dstC;

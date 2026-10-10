@@ -27,6 +27,11 @@ public class TapLog {
         count++;
     }
 
+    /** A decision the bot made (for working out what happened when something goes wrong). */
+    public synchronized void event(String what) {
+        sb.append(System.currentTimeMillis()).append(",,,,,,event,").append(what.replace(',', ';')).append('\n');
+    }
+
     public synchronized String save(Context ctx) {
         if (count == 0) return null;
         String name = "taps_" + new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(new Date()) + ".csv";
