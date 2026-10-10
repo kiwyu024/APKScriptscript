@@ -21,6 +21,8 @@ public class Solver {
     final int tapDir;
     final boolean[] visited;
     final int[] turns, bestTurns;
+    final int[] path, bestPath;    // cells along the road, leprechaun side first
+    int depth, bestLen;
     int cost, bestCost = Integer.MAX_VALUE;
     long budget = 3_000_000;
 
@@ -31,6 +33,15 @@ public class Solver {
         visited = new boolean[n];
         turns = new int[n];
         bestTurns = new int[n];
+        path = new int[n];
+        bestPath = new int[n];
+    }
+
+    /** Road cells from the leprechaun towards the pot, for the best solution found. */
+    public java.util.List<Integer> road() {
+        java.util.List<Integer> out = new java.util.ArrayList<>();
+        for (int i = 0; i < bestLen; i++) out.add(bestPath[i]);
+        return out;
     }
 
     /** Taps needed for k clockwise quarter turns. */
@@ -50,13 +61,19 @@ public class Solver {
     void step(int r, int c, int in) {
         if (r < 0 || c < 0 || r >= b.rows || c >= b.cols || --budget < 0) return;
         if (r == b.dstR && c == b.dstC) {
-            if (cost < bestCost) { bestCost = cost; System.arraycopy(turns, 0, bestTurns, 0, turns.length); }
+            if (cost < bestCost) {
+                bestCost = cost;
+                System.arraycopy(turns, 0, bestTurns, 0, turns.length);
+                System.arraycopy(path, 0, bestPath, 0, depth);
+                bestLen = depth;
+            }
             return;
         }
         int idx = r * b.cols + c;
         int base = b.masks[idx];
         if (visited[idx] || base == 0) return;
         visited[idx] = true;
+        path[depth++] = idx;
         int seen = 0;
         for (int k = 0; k < 4; k++) {
             int m = rotCw(base, k);
@@ -71,6 +88,7 @@ public class Solver {
             cost -= t;
             turns[idx] = 0;
         }
+        depth--;
         visited[idx] = false;
     }
 

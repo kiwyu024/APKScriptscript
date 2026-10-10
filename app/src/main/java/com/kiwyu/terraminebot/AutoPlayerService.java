@@ -163,11 +163,15 @@ public class AutoPlayerService extends AccessibilityService {
 
     // -------------------------------------------------------------------- taps
     /** Blocking tap at screen coordinates (call from a worker thread). */
-    boolean tap(int x, int y) {
+    boolean tap(int x, int y) { return tap(x, y, 40, 0, 0); }
+
+    /** Blocking tap held for {@code pressMs}, sliding (dx, dy) pixels while down. */
+    boolean tap(int x, int y, int pressMs, int dx, int dy) {
         Path path = new Path();
         path.moveTo(Math.max(0, x), Math.max(0, y));
+        if (dx != 0 || dy != 0) path.lineTo(Math.max(0, x + dx), Math.max(0, y + dy));
         GestureDescription g = new GestureDescription.Builder()
-                .addStroke(new GestureDescription.StrokeDescription(path, 0, 40)).build();
+                .addStroke(new GestureDescription.StrokeDescription(path, 0, Math.max(1, pressMs))).build();
         AtomicBoolean ok = new AtomicBoolean(false);
         CountDownLatch latch = new CountDownLatch(1);
         main.post(() -> {

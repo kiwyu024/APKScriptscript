@@ -16,6 +16,8 @@ import java.util.List;
 public class GameLoop implements Runnable {
     final AutoPlayerService svc;
     final Config cfg;
+    final Humanizer human;
+    final TapLog log = new TapLog();
     volatile boolean running;
     Thread thread;
 
@@ -39,6 +41,16 @@ public class GameLoop implements Runnable {
     public GameLoop(AutoPlayerService svc, Config cfg) {
         this.svc = svc;
         this.cfg = cfg;
+        this.human = new Humanizer(cfg);
+    }
+
+    /** One tap through the humanizer, recorded in the tap log. Box = half-size of the target. */
+    void tap(int cx, int cy, float hw, float hh, String kind, String detail) {
+        int[] p = human.point(cx, cy, hw, hh);
+        int press = human.pressMs();
+        int[] d = human.drift();
+        svc.tap(p[0], p[1], press, d[0], d[1]);
+        if (cfg.logTaps) log.add(p[0], p[1], press, d, kind, detail);
     }
 
     void start() {
@@ -60,14 +72,15 @@ public class GameLoop implements Runnable {
             catch (Exception e) { svc.status("Error: " + e.getClass().getSimpleName() + " " + e.getMessage()); }
             AutoPlayerService.sleep(cfg.loopMs);
         }
-        svc.status("Stopped (solved " + solvedCount + ")");
+        String saved = cfg.logTaps ? log.save(svc) : null;
+        svc.status("Stopped (solved " + solvedCount + ")" + (saved == null ? "" : "\nTap log: " + saved));
     }
 
     void step() {
         long now = System.currentTimeMillis();
 
         // A stray tap on an ad opened the Play Store / a browser: go back.
-        if (isOutsideApp(svc.fgPackage) && (adStart > 0 || now < expectAdUntil + 60000)) {
+        if (cfg.handleAds && isOutsideApp(svc.fgPackage) && (adStart > 0 || now < expectAdUntil + 60000)) {
             svc.status("Ad opened " + svc.fgPackage + " — going back");
             svc.performGlobalAction(AccessibilityService.GLOBAL_ACTION_BACK);
             AutoPlayerService.sleep(1500);
@@ -109,8 +122,13 @@ public class GameLoop implements Runnable {
                 svc.status("Result screen — waiting " + (cfg.replayGapSec - since / 1000) + "s");
                 return;
             }
-            svc.status("Tapping replay (solved " + solvedCount + ")");
-            svc.tap(replay[0], replay[1]);
+            if (replay[4] == 1 && !cfg.handleAds) {
+                svc.status("'Watch Ad' screen — ad automation is off, tap it yourself");
+                return;
+            }
+            AutoPlayerService.sleep(human.reactionPause());
+            svc.status("Tapping " + (replay[4] == 1 ? "Watch Ad" : "Play Again") + " (solved " + solvedCount + ")");
+            tap(replay[0], replay[1], replay[2] * 0.8f, replay[3] * 0.8f, "replay", replay[4] == 1 ? "watch_ad" : "play_again");
             lastReplayTap = System.currentTimeMillis();
             expectAdUntil = lastReplayTap + 12000;
             solvedWaiting = false;
@@ -139,11 +157,11 @@ public class GameLoop implements Runnable {
 
         // Unknown screen: if an X sits in a top corner for a while, it's probably an ad we didn't recognise.
         if (unknownSince == 0) unknownSince = now;
-        if (now - unknownSince > 6000) {
+        if (cfg.handleAds && now - unknownSince > 6000) {
             int[] x = Vision.findCloseX(f);
             if (x[0] >= cfg.xThreshold * 2 && now - lastAdTap > 2000) {
                 svc.status("Unknown screen with an X — tapping it");
-                svc.tap(x[1], x[2]);
+                tap(x[1], x[2], 4, 4, "ad_close", "unknown_screen");
                 lastAdTap = now;
                 return;
             }
@@ -168,7 +186,12 @@ public class GameLoop implements Runnable {
         for (AccessibilityNodeInfo n : nodes) {
             Rect r = new Rect();
             n.getBoundsInScreen(r);
-            if (!r.isEmpty()) return new int[]{r.centerX(), r.centerY()};
+            if (r.isEmpty()) continue;
+            String t = (n.getText() == null ? "" : n.getText().toString())
+                    + (n.getContentDescription() == null ? "" : n.getContentDescription().toString());
+            String l = t.toLowerCase(java.util.Locale.US);
+            int type = l.contains("watch") || l.contains("ad ") || l.contains("level") ? 1 : 0;
+            return new int[]{r.centerX(), r.centerY(), r.width() / 2, r.height() / 2, type};
         }
         // Both result screens still show the board (in place, or moved up on level-up), so a colour
         // match is only trusted below a visible board — this keeps yellow/orange ads from matching.
@@ -179,13 +202,17 @@ public class GameLoop implements Runnable {
     // -------------------------------------------------------------------- ads
     void handleAd(Frame f, long now, boolean adFg) {
         if (adStart == 0) adStart = now;
+        if (!cfg.handleAds) {
+            svc.status("Ad showing — ad automation is off");
+            return;
+        }
         long secs = (now - adStart) / 1000;
         if (now - lastAdTap < 1500) return;
 
         int[] x = Vision.findCloseX(f);
         if (x[0] >= cfg.xThreshold) {
             svc.status("Ad: closing X at " + x[1] + "," + x[2] + " (" + secs + "s)");
-            svc.tap(x[1], x[2]);
+            tap(x[1], x[2], 4, 4, "ad_close", "x_detected");
             lastAdTap = System.currentTimeMillis();
             return;
         }
@@ -219,7 +246,7 @@ public class GameLoop implements Runnable {
             if (adFallbackTries < all.length) {
                 int[] p = all[adFallbackTries++];
                 svc.status("Ad: no X found, trying " + p[0] + "," + p[1]);
-                svc.tap(p[0], p[1]);
+                tap(p[0], p[1], 4, 4, "ad_close", "corner_fallback");
             } else if (cfg.backAsLastResort) {
                 svc.status("Ad: pressing Back");
                 svc.performGlobalAction(AccessibilityService.GLOBAL_ACTION_BACK);
@@ -262,16 +289,31 @@ public class GameLoop implements Runnable {
         }
 
         int[] target = masks.clone();
-        for (int i = 0; i < masks.length; i++) target[i] = Solver.rotCw(masks[i], turns[i]);
-        svc.status("Solving: " + solver.bestTaps() + " taps");
-        for (int r = 0; r < board.rows && running; r++)
-            for (int c = 0; c < board.cols && running; c++) {
-                int k = solver.taps(turns[r * board.cols + c]);
-                for (int t = 0; t < k && running; t++) {
-                    svc.tap(board.cx(c), board.cy(r));
-                    AutoPlayerService.sleep(cfg.tapDelayMs);
-                }
+        java.util.List<Integer> need = new java.util.ArrayList<>();
+        for (int i = 0; i < masks.length; i++) {
+            target[i] = Solver.rotCw(masks[i], turns[i]);
+            if (solver.taps(turns[i]) > 0) need.add(i);
+        }
+        if (attempts == 1) {
+            long think = human.thinkPause();
+            if (think > 0) { svc.status("Reading the board…"); AutoPlayerService.sleep(think); }
+        }
+        svc.status("Solving: " + solver.bestTaps() + " taps" + (cfg.humanize ? " (humanized)" : ""));
+        float hw = board.pitchX / 2f, hh = board.pitchY / 2f;
+        boolean first = true;
+        for (int idx : human.order(solver.road(), need)) {
+            if (!running) break;
+            int r = idx / board.cols, c = idx % board.cols;
+            int k = solver.taps(turns[idx]);
+            if (human.mistake()) k += 4;   // a full extra turn ends where it would have anyway
+            if (!first) AutoPlayerService.sleep(human.gapNextTile());
+            first = false;
+            for (int t = 0; t < k && running; t++) {
+                if (t > 0) AutoPlayerService.sleep(human.gapSameTile());
+                tap(board.cx(c), board.cy(r), hw, hh, "tile", r + ":" + c);
             }
+        }
+        AutoPlayerService.sleep(cfg.tapDelayMs);
         lastTarget = target;
         AutoPlayerService.sleep(cfg.settleMs);
 
@@ -308,7 +350,7 @@ public class GameLoop implements Runnable {
         if (idx < 0) { cfg.tapDir = 1; cfg.save(svc); return true; }
         int r = idx / board.cols, c = idx % board.cols, before = board.masks[idx];
         svc.status("Learning tap direction…");
-        svc.tap(board.cx(c), board.cy(r));
+        tap(board.cx(c), board.cy(r), board.pitchX / 2f, board.pitchY / 2f, "tile", "learn_direction");
         AutoPlayerService.sleep(cfg.settleMs);
         Frame f2 = lastBoardRect != null && intersectsPanel() ? svc.screenshotWithoutPanel() : svc.screenshot();
         if (f2 == null) return false;

@@ -29,6 +29,20 @@ public class Config {
     public String adClosePoints = ""; // optional "x,y;x,y" spots to try
     public boolean backAsLastResort = true;
 
+    // Humanize (for testing the game's anti-cheat).
+    public boolean humanize = false;
+    public int jitterPct = 55;       // max tap offset from tile centre, % of half a tile
+    public int pressMinMs = 45, pressMaxMs = 130;
+    public int driftPx = 3;          // finger slide while pressed
+    public int moveMinMs = 80, moveMaxMs = 380;     // extra gap when moving to another tile
+    public int thinkMinMs = 700, thinkMaxMs = 2600; // before the first tap of a puzzle
+    public int reactMinMs = 600, reactMaxMs = 2200; // before tapping the replay button
+    public int mistakePct = 0;       // chance per tile of a deliberate extra full turn (costs 4 taps)
+    public boolean logTaps = true;
+
+    /** Ads: off by default; turn on only in builds that serve AdMob test ads. */
+    public boolean handleAds = false;
+
     public String gamePackage = "";
     public boolean debugDump = false;
 
@@ -52,6 +66,16 @@ public class Config {
         k.adTimeoutSec = p.getInt("adTimeoutSec", k.adTimeoutSec);
         k.adClosePoints = p.getString("adClosePoints", "");
         k.backAsLastResort = p.getBoolean("backAsLastResort", k.backAsLastResort);
+        k.humanize = p.getBoolean("humanize", k.humanize);
+        k.jitterPct = p.getInt("jitterPct", k.jitterPct);
+        k.pressMinMs = p.getInt("pressMinMs", k.pressMinMs); k.pressMaxMs = p.getInt("pressMaxMs", k.pressMaxMs);
+        k.driftPx = p.getInt("driftPx", k.driftPx);
+        k.moveMinMs = p.getInt("moveMinMs", k.moveMinMs); k.moveMaxMs = p.getInt("moveMaxMs", k.moveMaxMs);
+        k.thinkMinMs = p.getInt("thinkMinMs", k.thinkMinMs); k.thinkMaxMs = p.getInt("thinkMaxMs", k.thinkMaxMs);
+        k.reactMinMs = p.getInt("reactMinMs", k.reactMinMs); k.reactMaxMs = p.getInt("reactMaxMs", k.reactMaxMs);
+        k.mistakePct = p.getInt("mistakePct", k.mistakePct);
+        k.logTaps = p.getBoolean("logTaps", k.logTaps);
+        k.handleAds = p.getBoolean("handleAds", k.handleAds);
         k.gamePackage = p.getString("gamePackage", "");
         k.debugDump = p.getBoolean("debugDump", false);
         return k;
@@ -68,6 +92,13 @@ public class Config {
                 .putInt("adTimeoutSec", adTimeoutSec)
                 .putString("adClosePoints", adClosePoints)
                 .putBoolean("backAsLastResort", backAsLastResort)
+                .putBoolean("humanize", humanize).putInt("jitterPct", jitterPct)
+                .putInt("pressMinMs", pressMinMs).putInt("pressMaxMs", pressMaxMs).putInt("driftPx", driftPx)
+                .putInt("moveMinMs", moveMinMs).putInt("moveMaxMs", moveMaxMs)
+                .putInt("thinkMinMs", thinkMinMs).putInt("thinkMaxMs", thinkMaxMs)
+                .putInt("reactMinMs", reactMinMs).putInt("reactMaxMs", reactMaxMs)
+                .putInt("mistakePct", mistakePct).putBoolean("logTaps", logTaps)
+                .putBoolean("handleAds", handleAds)
                 .putString("gamePackage", gamePackage)
                 .putBoolean("debugDump", debugDump)
                 .apply();

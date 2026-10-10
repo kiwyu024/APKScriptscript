@@ -198,7 +198,7 @@ public class Vision {
     // ---------------------------------------------------------- replay button
     /**
      * Finds the orange "Watch Ad -> Play Level N" button or the yellow "Play Again" button below
-     * {@code fromY}. Returns {x, y} or null. The grey-green Exit button never matches.
+     * {@code fromY}. Returns {x, y, halfWidth, halfHeight, type} (type 1 = Watch Ad, 0 = Play Again) or null. The grey-green Exit button never matches.
      */
     public static int[] findReplayButton(Frame f, int fromY) {
         int[] o = band(f, fromY, true);
@@ -233,12 +233,13 @@ public class Vision {
         if (bestRun < minRun) return null;
         int yc = bestEnd - bestRun / 2;
         long sx = 0;
-        int n = 0;
+        int n = 0, minX = f.w, maxX = 0;
         for (int x = 0; x < f.w; x++) {
             int p = f.px[yc * f.w + x];
-            if (wantOrange ? orange(p) : yellow(p)) { sx += x; n++; }
+            if (wantOrange ? orange(p) : yellow(p)) { sx += x; n++; minX = Math.min(minX, x); maxX = Math.max(maxX, x); }
         }
-        return n == 0 ? null : new int[]{(int) (sx / n), yc};
+        if (n == 0) return null;
+        return new int[]{(int) (sx / n), yc, Math.max(1, (maxX - minX) / 2), Math.max(1, bestRun / 2), wantOrange ? 1 : 0};
     }
 
     // ------------------------------------------------------------- ad close X

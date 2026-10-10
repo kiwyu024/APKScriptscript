@@ -25,7 +25,7 @@ public class MainActivity extends Activity {
     TextView serviceState;
     final Map<String, EditText> fields = new LinkedHashMap<>();
     Spinner dir;
-    CheckBox back, debug;
+    CheckBox back, debug, humanize, logTaps, handleAds;
 
     static final String HELP =
             "Setup (one time):\n" +
@@ -68,11 +68,30 @@ public class MainActivity extends Activity {
         num("settleMs", "Wait after tapping, ms", cfg.settleMs);
         num("loopMs", "Loop interval, ms", cfg.loopMs);
 
+        title("Humanize (anti-cheat testing)");
+        humanize = check("Humanize taps", cfg.humanize);
+        note("Random tap spot inside each tile, press length, finger drift, pauses, tile order. " +
+                "Off = exact centre taps with fixed delays.");
+        num("jitterPct", "Max tap offset from tile centre (% of half a tile)", cfg.jitterPct);
+        num("pressMinMs", "Press length min, ms", cfg.pressMinMs);
+        num("pressMaxMs", "Press length max, ms", cfg.pressMaxMs);
+        num("driftPx", "Finger drift while pressed, px (keep ≤ 8)", cfg.driftPx);
+        num("moveMinMs", "Extra pause moving to another tile, min ms", cfg.moveMinMs);
+        num("moveMaxMs", "Extra pause moving to another tile, max ms", cfg.moveMaxMs);
+        num("thinkMinMs", "Pause before solving, min ms", cfg.thinkMinMs);
+        num("thinkMaxMs", "Pause before solving, max ms", cfg.thinkMaxMs);
+        num("reactMinMs", "Pause before tapping replay, min ms", cfg.reactMinMs);
+        num("reactMaxMs", "Pause before tapping replay, max ms", cfg.reactMaxMs);
+        num("mistakePct", "Mistake chance per tile, % (each costs 4 extra taps)", cfg.mistakePct);
+        logTaps = check("Log every tap to Download/TerraMineBot (CSV, saved on stop)", cfg.logTaps);
+
         title("Replay");
         text("playTexts", "Replay button texts (comma separated)", cfg.playTexts);
         num("replayGapSec", "Min seconds between replay taps", cfg.replayGapSec);
 
         title("Ads");
+        handleAds = check("Watch & close ads automatically (only with AdMob test ads)", cfg.handleAds);
+        note("Off: the bot stops at 'Watch Ad' screens and leaves ads alone.");
         num("xThreshold", "Close-X detection threshold (default 20)", cfg.xThreshold);
         num("adTimeoutSec", "If no X after this many seconds, tap corners / Back", cfg.adTimeoutSec);
         text("adClosePoints", "Extra X spots to try (x,y;x,y)", cfg.adClosePoints);
@@ -110,6 +129,16 @@ public class MainActivity extends Activity {
             cfg.adTimeoutSec = i("adTimeoutSec");
             cfg.adClosePoints = fields.get("adClosePoints").getText().toString().trim();
             cfg.backAsLastResort = back.isChecked();
+            cfg.humanize = humanize.isChecked();
+            cfg.jitterPct = i("jitterPct");
+            cfg.pressMinMs = i("pressMinMs"); cfg.pressMaxMs = i("pressMaxMs");
+            cfg.driftPx = i("driftPx");
+            cfg.moveMinMs = i("moveMinMs"); cfg.moveMaxMs = i("moveMaxMs");
+            cfg.thinkMinMs = i("thinkMinMs"); cfg.thinkMaxMs = i("thinkMaxMs");
+            cfg.reactMinMs = i("reactMinMs"); cfg.reactMaxMs = i("reactMaxMs");
+            cfg.mistakePct = i("mistakePct");
+            cfg.logTaps = logTaps.isChecked();
+            cfg.handleAds = handleAds.isChecked();
             cfg.debugDump = debug.isChecked();
             cfg.save(this);
             Toast.makeText(this, "Saved — restart the bot (■ then ▶) to apply", Toast.LENGTH_LONG).show();
