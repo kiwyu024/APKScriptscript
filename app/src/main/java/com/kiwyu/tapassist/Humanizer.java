@@ -236,16 +236,49 @@ public class Humanizer {
         int lo, hi;
         if (clean) { lo = n == 4 ? 0 : 1; hi = n == 4 ? 2 : 3; }
         else { lo = 4; hi = n == 4 ? 5 : n == 5 ? 8 : n == 6 ? 12 : 15; }
-        double u = Math.pow(rnd.nextDouble(), 1.5);           // lean towards the low end
-        int w = lo + (int) Math.floor(u * (hi - lo + 1));
+        int w = lo + rnd.nextInt(hi - lo + 1);                // any amount in the range, evenly
         return Math.max(0, Math.min(Math.min(w, hi), cap));
     }
 
-    /** Over-rotations: each correct tap has {@code overRotatePct}% chance of going one step too far. */
-    int pickOverRotations(int correctTaps, int cap) {
+    /**
+     * Over-rotations: each correct tap goes one step too far with this round's rate. The rate itself is
+     * random per round (0 to 2x {@code overRotatePct}, so it averages out at {@code overRotatePct}%) unless
+     * {@code fixedRate} is set.
+     */
+    int pickOverRotations(int correctTaps, int slippableTaps, int cap, boolean fixedRate) {
+        double rate = fixedRate ? cfg.overRotatePct / 100.0 : rnd.nextDouble() * 2 * cfg.overRotatePct / 100.0;
+        // the last tile turned completes the road, so it can't slip: spread its share over the others
+        if (slippableTaps <= 0) return 0;
+        rate = Math.min(1, rate * correctTaps / (double) slippableTaps);
         int k = 0;
-        for (int i = 0; i < correctTaps; i++) if (rnd.nextInt(1000) < cfg.overRotatePct * 10) k++;
-        return Math.max(0, Math.min(k, cap / 4));
+        for (int i = 0; i < slippableTaps; i++) if (rnd.nextDouble() < rate) k++;
+        return Math.max(0, Math.min(k, cap / 2));
+    }
+
+    /**
+     * The odd "straight line" maps: leprechaun and gold in the same row or column with only straight
+     * pieces between them.
+     */
+    public static boolean isStraightLine(Board b) {
+        if (!b.ready()) return false;
+        int between = 0;
+        if (b.srcR == b.dstR) {
+            for (int c = Math.min(b.srcC, b.dstC) + 1; c < Math.max(b.srcC, b.dstC); c++, between++)
+                if (!straight(b.masks[b.srcR * b.cols + c])) return false;
+        } else if (b.srcC == b.dstC) {
+            for (int r = Math.min(b.srcR, b.dstR) + 1; r < Math.max(b.srcR, b.dstR); r++, between++)
+                if (!straight(b.masks[r * b.cols + b.srcC])) return false;
+        } else return false;
+        return between > 0;
+    }
+
+    static boolean straight(int m) { return m == 5 || m == 10; }
+
+    /** Taps for a full turn back to the same orientation: 2 for a straight, 4 for other shapes, 1 if symmetric. */
+    static int period(int m) {
+        if (Solver.rotCw(m) == m) return 1;
+        if (Solver.rotCw(m, 2) == m) return 2;
+        return 4;
     }
 
     /**
@@ -281,11 +314,26 @@ public class Humanizer {
         }
 
         int cap = Math.max(0, tapCap);
-        int cleanPct = cleanPct(b, correctTaps);
+        boolean straightMap = isStraightLine(b);
+        int cleanPct = straightMap ? 100 : cleanPct(b, correctTaps);
         boolean clean = rnd.nextInt(100) < cleanPct;
-        int wantWrong = pickWrongTaps(b, clean, cap);
-        int wantOver = pickOverRotations(correctTaps, cap - wantWrong);
-        String head = b.rows + "x" + b.cols + ", clean chance " + cleanPct + "% -> " + (clean ? "clean" : "messy");
+        int wantWrong = straightMap ? 0 : pickWrongTaps(b, clean, cap);   // never a wrong tile on straight maps
+        // taps that can slip: all but the last tile's (that one connects the road), and only on shapes that change
+        int lastTaps = 0;
+        {
+            List<Action> probe = base(road, need, turns, tapDir, fromGold);
+            Action lastA = probe.get(probe.size() - 1);
+            lastTaps = lastA.taps;
+            for (Action a : probe) if (period(b.masks[a.cell]) == 1) lastTaps += a.taps;
+        }
+        int wantOver;
+        if (straightMap)   // straight-line maps: 95% of rounds spot on, the rest over-rotate one tile and fix it
+            wantOver = correctTaps - lastTaps > 0 && cap >= 2 && rnd.nextInt(1000) < cfg.overRotatePct * 10 ? 1 : 0;
+        else
+            wantOver = pickOverRotations(correctTaps, correctTaps - lastTaps, cap - wantWrong, false);
+        if (straightMap) { start = start == Start.STRAY ? Start.LEPRECHAUN : start; }
+        String head = straightMap ? "straight-line map"
+                : b.rows + "x" + b.cols + ", clean chance " + cleanPct + "% -> " + (clean ? "clean" : "messy");
 
         List<Action> fallback = null;
         for (int attempt = 0; attempt < 150; attempt++) {
@@ -296,19 +344,22 @@ public class Humanizer {
             // later attempts settle for fewer mistakes
             int wrongTarget = attempt < 50 ? wantWrong : attempt < 100 ? (wantWrong + 1) / 2 : Math.min(wantWrong, 1);
             int overTarget = attempt < 100 ? wantOver : 0;
-            int wrong = 0, over = 0, guard = 0;
+            int wrong = 0, over = 0, overTaps = 0, guard = 0;
             if (start == Start.STRAY && wrongTarget > 0) wrong = 1;   // the stray opening tap is one of them
             while (wrong < wrongTarget && guard++ < 40) {
                 int added = addMistake(b, p, roadSet, turns, tapDir, wrongTarget - wrong, done, false);
                 if (added <= 0) break;
                 wrong += added;
             }
-            for (int k = 0; k < overTarget; k++) if (addOverRotation(b, p, done)) over++;
+            for (int k = 0; k < overTarget; k++) {
+                int extra = addOverRotation(b, p, done);
+                if (extra > 0) { over++; overTaps += extra; }
+            }
             if (start == Start.STRAY && wrongTarget > 0)
                 p.add(0, new Action(stray, 1, b.masks[stray] == 0 ? "grass" : "wrong_tile"));
             int[] fin = simulate(b, p, tapDir, true);
             if (fin != null) {
-                Plan plan = new Plan(p, fin, wrong + over * 4, done);
+                Plan plan = new Plan(p, fin, wrong + overTaps, done);
                 plan.summary = head + ": " + wrong + " wrong tap" + (wrong == 1 ? "" : "s")
                         + (over > 0 ? ", " + over + " over-rotation" + (over == 1 ? "" : "s") : "");
                 return plan;
@@ -319,18 +370,23 @@ public class Humanizer {
         return plain;
     }
 
-    /** Turns a correct tile one step too far, then all the way round to where it should be (+4 taps). */
-    boolean addOverRotation(Board b, List<Action> p, List<String> done) {
+    /**
+     * Turns a correct tile one step too far, then on round to where it should be: +4 taps for most
+     * shapes, +2 for a straight (it looks the same every two turns). Returns the extra taps, 0 if none fitted.
+     */
+    int addOverRotation(Board b, List<Action> p, List<String> done) {
         int last = p.size() - 1;
         List<Integer> tiles = new ArrayList<>();
-        for (int i = 0; i < last; i++) if (p.get(i).kind.equals("tile")) tiles.add(i);
-        if (tiles.isEmpty()) return false;
+        for (int i = 0; i < last; i++)
+            if (p.get(i).kind.equals("tile") && period(b.masks[p.get(i).cell]) > 1) tiles.add(i);
+        if (tiles.isEmpty()) return 0;
         int i = tiles.get(rnd.nextInt(tiles.size()));
         Action a = p.get(i);
+        int per = period(b.masks[a.cell]);
         p.add(i + 1, new Action(a.cell, 1, "overshoot"));
-        p.add(i + 2, new Action(a.cell, 3, "correction"));
+        p.add(i + 2, new Action(a.cell, per - 1, "correction"));
         done.add("over-rotated " + name(b, a.cell));
-        return true;
+        return per;
     }
 
     /**

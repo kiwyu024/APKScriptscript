@@ -18,7 +18,7 @@ All measurements are proportional to the screen and board size.
 
 ## Install
 
-1. Copy `dist/TapAssist-0.8.1.apk` to the phone and install it (allow installs from that app when asked).
+1. Copy `dist/TapAssist-0.8.2.apk` to the phone and install it (allow installs from that app when asked).
 2. Open **Tap Assist** → **App info** → ⋮ → **Allow restricted settings**. Android 13+ requires this before a
    sideloaded app can use accessibility.
 3. **Accessibility settings** → Installed apps → **Tap Assist** → On.
@@ -40,9 +40,15 @@ Each puzzle is either **clean** (a few wrong taps) or **messy** (more). The clea
 | 7×7 | 10% | 1–3 | 4–15 |
 
 The chance is nudged down for boards that need more turns than usual for their size, and up for easier ones (only
-slightly near 100%). Wrong taps go on road tiles that aren't on the route, on grass, or bump a correct tile and fix
-it. On top of that, about 5% of the correct taps **over-rotate**: the right tile goes one step too far, then all the
-way round (+4 taps). Plans are simulated so the road connects on the final tap. Retries after a misread are clean.
+slightly near 100%). Within a clean or messy round the number of wrong taps is picked evenly across its range, so how
+messy a round gets varies. Wrong taps go on road tiles that aren't on the route, on grass, or bump a correct tile and fix
+it. On top of that, the correct taps **over-rotate** at a rate picked per round (0–10%, averaging 5%): the right tile
+goes one step too far, then on round to where it should be (+4 taps, or +2 for a straight piece, which repeats every
+two turns).
+
+**Straight-line maps** (leprechaun and gold in the same row or column with only straight pieces between) never get a
+wrong tile. 95% of those rounds are spot on, and 5% over-rotate one tile and fix it. A map that needs just one tile
+turned is always spot on, because that tap finishes it. Plans are simulated so the road connects on the final tap. Retries after a misread are clean.
 All the numbers are in Settings → Mistakes.
 
 ## Humanize mode (anti-cheat testing)
