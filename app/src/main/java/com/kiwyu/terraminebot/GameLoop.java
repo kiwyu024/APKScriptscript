@@ -24,6 +24,7 @@ public class GameLoop implements Runnable {
     long adStart = 0, adEndedAt = 0, lastAdTap = 0;
     int adFallbackTries = 0;
     long unknownSince = 0;
+    Rect lastBoardRect;        // where the board was last seen (to keep the panel out of screenshots)
 
     int[] lastTarget;          // masks we expect after our taps
     boolean solvedWaiting;     // board solved; wait for the result screen
@@ -73,11 +74,25 @@ public class GameLoop implements Runnable {
             return;
         }
 
-        Frame f = svc.screenshot();
+        // The floating panel shows up in screenshots. If it sits over the board, capture without it.
+        Rect panel = svc.panelRect();
+        boolean hide = panel != null && lastBoardRect != null && Rect.intersects(panel, lastBoardRect);
+        Frame f = hide ? svc.screenshotWithoutPanel() : svc.screenshot();
         if (f == null) { svc.status("Screenshot failed (retrying)"); return; }
         if (!running) return;
 
         Board board = Vision.findBoard(f, cfg);
+        if (board != null) {
+            Rect br = new Rect(board.left, board.top, board.left + board.size, board.top + board.size);
+            if (!hide && panel != null && Rect.intersects(panel, br)) {
+                lastBoardRect = br;
+                f = svc.screenshotWithoutPanel();
+                if (f == null) return;
+                board = Vision.findBoard(f, cfg);
+                if (board == null) return;
+            }
+            lastBoardRect = new Rect(board.left, board.top, board.left + board.size, board.top + board.size);
+        }
         boolean adFg = svc.adInForeground();
         int[] replay = adFg ? null : findReplay(f, board);
 
@@ -260,7 +275,7 @@ public class GameLoop implements Runnable {
         lastTarget = target;
         AutoPlayerService.sleep(cfg.settleMs);
 
-        Frame check = svc.screenshot();
+        Frame check = lastBoardRect != null && intersectsPanel() ? svc.screenshotWithoutPanel() : svc.screenshot();
         if (check == null) return;
         Board b2 = Vision.findBoard(check, cfg);
         if (b2 == null) { markSolved(); return; }   // screen already moved on
@@ -268,6 +283,11 @@ public class GameLoop implements Runnable {
         Solver verify = new Solver(b2, cfg.tapDir);
         if (b2.ready() && verify.solve() != null && verify.bestTaps() == 0) markSolved();
         else if (!b2.ready()) markSolved();          // leprechaun started walking
+    }
+
+    boolean intersectsPanel() {
+        Rect p = svc.panelRect();
+        return p != null && Rect.intersects(p, lastBoardRect);
     }
 
     void markSolved() {
@@ -290,7 +310,7 @@ public class GameLoop implements Runnable {
         svc.status("Learning tap direction…");
         svc.tap(board.cx(c), board.cy(r));
         AutoPlayerService.sleep(cfg.settleMs);
-        Frame f2 = svc.screenshot();
+        Frame f2 = lastBoardRect != null && intersectsPanel() ? svc.screenshotWithoutPanel() : svc.screenshot();
         if (f2 == null) return false;
         Vision.read(f2, board, cfg);
         int after = board.masks[idx];

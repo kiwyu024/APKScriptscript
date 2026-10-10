@@ -114,6 +114,25 @@ public class AutoPlayerService extends AccessibilityService {
     }
 
     // ------------------------------------------------------------- screenshots
+    /** Panel bounds on screen, read on the main thread (null if hidden). */
+    Rect panelRect() {
+        AtomicReference<Rect> out = new AtomicReference<>();
+        CountDownLatch latch = new CountDownLatch(1);
+        main.post(() -> { if (overlay != null) out.set(overlay.screenRect()); latch.countDown(); });
+        try { latch.await(1, TimeUnit.SECONDS); } catch (InterruptedException ie) { Thread.currentThread().interrupt(); }
+        return out.get();
+    }
+
+    /** Screenshot with the floating panel made invisible for the capture (it draws over whatever is under it). */
+    Frame screenshotWithoutPanel() {
+        CountDownLatch hidden = new CountDownLatch(1);
+        main.post(() -> { if (overlay != null) overlay.setTransparent(true); hidden.countDown(); });
+        try { hidden.await(1, TimeUnit.SECONDS); } catch (InterruptedException ie) { Thread.currentThread().interrupt(); }
+        sleep(120);   // let a frame without the panel reach the screen
+        try { return screenshot(); }
+        finally { main.post(() -> { if (overlay != null) overlay.setTransparent(false); }); }
+    }
+
     /** Blocking screenshot (call from a worker thread). Retries when the system rate limit kicks in. */
     Frame screenshot() {
         for (int attempt = 0; attempt < 4; attempt++) {

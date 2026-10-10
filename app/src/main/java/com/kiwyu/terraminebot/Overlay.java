@@ -160,7 +160,7 @@ public class Overlay {
         setStatus("Reading screen…");
         new Thread(() -> {
             AutoPlayerService.sleep(300);
-            Frame f = svc.screenshot();
+            Frame f = svc.screenshotWithoutPanel();
             if (f == null) { svc.status("Screenshot failed"); return; }
             Config cfg = Config.load(svc);
             Board b = Vision.findBoard(f, cfg);
@@ -184,6 +184,17 @@ public class Overlay {
     }
 
     void setStatus(String s) { if (status != null) status.setText(s); }
+
+    /** Panel bounds on screen (main thread), or null when not shown. */
+    android.graphics.Rect screenRect() {
+        if (root == null || root.getVisibility() != View.VISIBLE || root.getWidth() == 0) return null;
+        int[] loc = new int[2];
+        root.getLocationOnScreen(loc);
+        return new android.graphics.Rect(loc[0], loc[1], loc[0] + root.getWidth(), loc[1] + root.getHeight());
+    }
+
+    /** Makes the panel invisible (but keeps its place) so it doesn't show up in a screenshot. */
+    void setTransparent(boolean on) { if (root != null) root.setAlpha(on ? 0f : 1f); }
 
     /** While the bot taps, let touches fall through the panel so it can never swallow a tap. */
     void setPassThrough(boolean on) {

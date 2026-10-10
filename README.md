@@ -7,16 +7,18 @@ What it does, each tick (~0.7 s):
 
 | Screen | Action |
 |---|---|
-| Puzzle board | Finds the board by its yellow frame, reads every tile's road openings, locates the leprechaun and the pot of gold, finds the rotations that connect them **with the fewest taps**, and taps the tiles (a tap turns a tile clockwise). |
+| Puzzle board | Finds the board by its yellow frame, works out the grid size from the seams between tiles (4×4 on early levels, 6×6 later; 3–8 supported), reads every tile's road openings, locates the leprechaun and the pot of gold, finds the rotations that connect them **with the fewest taps**, and taps the tiles (a tap turns a tile clockwise). |
 | Result screen | Taps **Play Again** or **Watch Ad → Play Level N**. It never taps Exit. |
 | Ad | Waits until a close **X** appears in either top corner (e.g. AdMob's "Reward granted ✕") and taps it. If no X shows within 90 s it tries the corners, then Back. If a tap opens the Play Store or a browser, it presses Back. |
 
-The vision was tuned on 1080×2340 screen recordings from a Galaxy S25+ (levels 50–53).
+The vision was tuned on 1080×2340 screen recordings from a Galaxy S25+ (levels 1 and 50–53). The leprechaun and pot
+are located anew on every screenshot, so random spawns are handled. If the floating panel sits over the board, it is
+made invisible for each capture.
 All measurements are proportional to the screen and board size.
 
 ## Install
 
-1. Copy `dist/TerraMineBot-0.1.apk` to the phone and install it (allow installs from that app when asked).
+1. Copy `dist/TerraMineBot-0.2.apk` to the phone and install it (allow installs from that app when asked).
 2. Open **TerraMine Bot** → **App info** → ⋮ → **Allow restricted settings**. Android 13+ requires this before a
    sideloaded app can use accessibility.
 3. **Accessibility settings** → Installed apps → **TerraMine Bot** → On.

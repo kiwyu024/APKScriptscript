@@ -55,9 +55,58 @@ public class Vision {
             if (best < outer * 0.8f) continue;
             int cyMid = bestEnd - best / 2;
             int inner = outer - 2 * lt;
-            return new Board(left + lt, cyMid - inner / 2, inner, inner, cfg.rows, cfg.cols);
+            int bl = left + lt, bt = cyMid - inner / 2;
+            int n = gridCount(f, bl, bt, inner, cfg.cols);
+            return new Board(bl, bt, inner, inner, n, n);
         }
         return null;
+    }
+
+    /**
+     * Number of tiles per side (the game uses 4x4 on early levels and 6x6 later). Tiles are separated by
+     * darker grass seams, so for each candidate n we compare brightness at the n-1 seam lines with
+     * brightness at the tile middles; the right n has dark seams and bright middles.
+     */
+    static int gridCount(Frame f, int left, int top, int size, int fallback) {
+        if (size < 40) return fallback;
+        float[] colP = new float[size], rowP = new float[size];
+        int step = Math.max(1, size / 250);
+        for (int y = 0; y < size; y += step)          // column profile: every x, sampled rows
+            for (int x = 0; x < size; x++) colP[x] += f.lum(left + x, top + y);
+        for (int x = 0; x < size; x += step)          // row profile: every y, sampled columns
+            for (int y = 0; y < size; y++) rowP[y] += f.lum(left + x, top + y);
+        int best = fallback;
+        float bestScore = 10;   // below this the seams aren't clear; keep the default
+        for (int n = 3; n <= 8; n++) {
+            float sc = seamScore(colP, n) + seamScore(rowP, n);
+            if (sc > bestScore) { bestScore = sc; best = n; }
+        }
+        return best;
+    }
+
+    static float seamScore(float[] p, int n) {
+        int len = p.length, w = Math.max(2, len / 250);
+        // normalise: profile values are sums over sampled lines; scale out by the mean
+        float mean = 0;
+        for (float v : p) mean += v;
+        mean /= len;
+        if (mean <= 0) return 0;
+        float seams = 0, mids = 0;
+        for (int k = 1; k < n; k++) {
+            int x = Math.round(k * len / (float) n);
+            float mn = Float.MAX_VALUE;
+            for (int i = Math.max(0, x - 2 * w); i <= Math.min(len - 1, x + 2 * w); i++) mn = Math.min(mn, p[i]);
+            seams += mn;
+        }
+        for (int k = 0; k < n; k++) {
+            int x = Math.round((k + 0.5f) * len / (float) n);
+            float sum = 0;
+            int cnt = 0;
+            for (int i = Math.max(0, x - 2 * w); i <= Math.min(len - 1, x + 2 * w); i++) { sum += p[i]; cnt++; }
+            mids += sum / cnt;
+        }
+        // in "average luminance" units, like the prototype
+        return (mids / n - seams / (n - 1)) / mean * 128f;
     }
 
     // ----------------------------------------------------------------- tiles
