@@ -360,4 +360,54 @@ public class Vision {
         if (n < 30) return null;
         return new int[]{(int) (sx / n), (int) (sy / n)};
     }
+
+    // ------------------------------------------------------- ad "next / skip" disc
+    /**
+     * A round white button with a dark symbol inside (e.g. the "->" arrow some ads show before their X)
+     * in either top corner. Returns {score, x, y}; score 0 if none.
+     */
+    public static int[] findCornerDisc(Frame f) {
+        int[] best = {0, 0, 0};
+        int yTop = Math.round(f.h * 0.025f), yBot = Math.round(f.h * 0.12f);
+        int step = Math.max(2, f.w / 270);
+        for (float rf : new float[]{0.020f, 0.026f, 0.032f}) {
+            int R = Math.round(f.w * rf);
+            int[][] ranges = {{R + 2, Math.round(f.w * 0.22f)}, {Math.round(f.w * 0.78f), f.w - R - 2}};
+            for (int[] rg : ranges)
+                for (int y = yTop + R; y < yBot - R; y += step)
+                    for (int x = rg[0]; x < rg[1]; x += step) {
+                        // ring at 0.85R must be white all round
+                        int ringMin = 255;
+                        for (int k = 0; k < 16 && ringMin > 200; k++) {
+                            double a = k * Math.PI / 8;
+                            int p = f.get(x + (int) Math.round(Math.cos(a) * R * 0.85), y + (int) Math.round(Math.sin(a) * R * 0.85));
+                            int lo = Math.min(Frame.r(p), Math.min(Frame.g(p), Frame.b(p)));
+                            ringMin = Math.min(ringMin, lo);
+                        }
+                        if (ringMin <= 200) continue;
+                        // just outside the disc should be noticeably darker somewhere (it's a button, not a white area)
+                        int outsideDark = 0;
+                        for (int k = 0; k < 16; k++) {
+                            double a = k * Math.PI / 8;
+                            int l = f.lum(x + (int) Math.round(Math.cos(a) * R * 1.35), y + (int) Math.round(Math.sin(a) * R * 1.35));
+                            if (l < 170) outsideDark++;
+                        }
+                        if (outsideDark < 10) continue;
+                        // a dark symbol inside
+                        int n = 0, dark = 0, r2 = Math.round(R * 0.55f);
+                        for (int yy = y - r2; yy <= y + r2; yy += 2)
+                            for (int xx = x - r2; xx <= x + r2; xx += 2) {
+                                if ((xx - x) * (xx - x) + (yy - y) * (yy - y) > r2 * r2) continue;
+                                n++;
+                                if (f.lum(xx, yy) < 90) dark++;
+                            }
+                        if (n == 0) continue;
+                        float frac = dark / (float) n;
+                        if (frac < 0.06f || frac > 0.55f) continue;
+                        int score = Math.round(100 * frac) + outsideDark;
+                        if (score > best[0]) { best[0] = score; best[1] = x; best[2] = y; }
+                    }
+        }
+        return best;
+    }
 }

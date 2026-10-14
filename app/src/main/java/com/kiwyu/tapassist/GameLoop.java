@@ -24,6 +24,7 @@ public class GameLoop implements Runnable {
     long lastReplayTap = 0;
     long expectAdUntil = 0;
     long adStart = 0, adEndedAt = 0, lastAdTap = 0;
+    int discTaps = 0;           // arrow-button taps for the current ad
     int adFallbackTries = 0;
     long unknownSince = 0;
     Rect lastBoardRect;        // where the board was last seen (to keep the panel out of screenshots)
@@ -118,7 +119,7 @@ public class GameLoop implements Runnable {
             handleAd(f, now, adFg);
             return;
         }
-        if (adStart > 0) { adStart = 0; adEndedAt = now; adFallbackTries = 0; }
+        if (adStart > 0) { adStart = 0; discTaps = 0; adEndedAt = now; adFallbackTries = 0; }
 
         if (replay != null) {
             unknownSince = 0;
@@ -216,7 +217,7 @@ public class GameLoop implements Runnable {
     }
 
     void endFalseAd() {
-        adStart = 0;
+        adStart = 0; discTaps = 0;
         expectAdUntil = 0;
         adFallbackTries = 0;
     }
@@ -317,6 +318,18 @@ public class GameLoop implements Runnable {
         if (now - lastAdTap < 1500) return;
 
         int[] x = Vision.findCloseX(f);
+        if (x[0] < cfg.xThreshold && discTaps < 3 && secs >= 2) {
+            // some ads show a round "->" (next/skip) button first and only then the X
+            int[] d = Vision.findCornerDisc(f);
+            if (d[0] > 0) {
+                svc.status("Ad: tapping the arrow at " + d[1] + "," + d[2] + " (" + secs + "s)");
+                if (cfg.logTaps) log.event("ad: no X yet, tapping the round arrow button");
+                tap(d[1], d[2], 4, 4, "ad_next", "arrow");
+                discTaps++;
+                lastAdTap = System.currentTimeMillis();
+                return;
+            }
+        }
         if (x[0] >= cfg.xThreshold) {
             svc.status("Ad: closing X at " + x[1] + "," + x[2] + " (" + secs + "s)");
             tap(x[1], x[2], 4, 4, "ad_close", "x_detected");
