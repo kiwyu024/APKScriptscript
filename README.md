@@ -18,7 +18,7 @@ All measurements are proportional to the screen and board size.
 
 ## Install
 
-1. Copy `dist/TapAssist-0.8.3.apk` to the phone and install it (allow installs from that app when asked).
+1. Copy `dist/TapAssist-0.8.3.1.apk` to the phone and install it (allow installs from that app when asked).
 2. Open **Tap Assist** → **App info** → ⋮ → **Allow restricted settings**. Android 13+ requires this before a
    sideloaded app can use accessibility.
 3. **Accessibility settings** → Installed apps → **Tap Assist** → On.
@@ -27,6 +27,14 @@ All measurements are proportional to the screen and board size.
 ⚙ → **Check board now** shows what the bot reads: the tile grid (`LEP`/`POT`/openings), the tap count
 for the road, the replay button position and the X detector score. **Save debug snapshot**, or the
 "Save debug images" setting, writes raw and annotated screenshots to `Pictures/TapAssist`.
+
+## Speed
+
+Settings → **Speed**, or the **1x** button on the floating panel (cycles 1x → 1.5x → 2x → 3x, and works while
+running), divides every pause and tap gap by the multiplier. It never goes below what the game needs. Measured on
+the 120 fps recordings, a tile turn animates for about 120–175 ms, so the limits are: 200 ms between taps on the
+same tile, 90 ms when moving to another tile, 400 ms before re-reading the board, and about 3 screen checks a
+second (Android's screenshot limit). Mistake rates are unchanged. Breaks between rounds keep their length.
 
 ## Mistakes (on by default, independent of Humanize)
 

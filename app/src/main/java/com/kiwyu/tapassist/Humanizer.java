@@ -93,8 +93,30 @@ public class Humanizer {
 
     /** Gap before tapping the same tile again (a rhythm; faster than moving). */
     public long gapSameTile() {
-        if (!on()) return cfg.tapDelayMs;
-        return logNormal(cfg.tapDelayMs * 0.85 * tempo(), 0.22, Math.max(160, cfg.tapDelayMs / 2), cfg.tapDelayMs * 4L);
+        long v = !on() ? cfg.tapDelayMs
+                : logNormal(cfg.tapDelayMs * 0.85 * tempo(), 0.22, Math.max(160, cfg.tapDelayMs / 2), cfg.tapDelayMs * 4L);
+        return fast(v, SAME_TILE_MIN_MS);
+    }
+
+    // ------------------------------------------------------------------ speed
+    /*
+     * Speed setting: every delay is divided by cfg.speed, but never below what the game needs. Measured
+     * on the 120 fps recordings, one tile turn animates for about 120-175 ms, so:
+     */
+    static final long SAME_TILE_MIN_MS = 200;   // let a turn finish before tapping the same tile again
+    static final long MOVE_MIN_MS = 90;         // different tiles animate independently
+    static final long SETTLE_MIN_MS = 400;      // wait for the last turn before re-reading the board
+    static final long LOOP_MIN_MS = 350;        // Android allows about 3 screenshots a second
+
+    /** Delay scaled by the speed setting, but not below {@code floorMs}. */
+    public long fast(long ms, long floorMs) {
+        double sp = Math.max(0.25, cfg.speed);
+        return Math.max(floorMs, Math.round(ms / sp));
+    }
+
+    /** Delay scaled by the speed setting (pauses with no game-imposed minimum). */
+    public long scaled(long ms) {
+        return Math.round(ms / Math.max(0.25, cfg.speed));
     }
 
     /** Accidental double tap: second touch right after the first. */
@@ -105,7 +127,7 @@ public class Humanizer {
      * distance, and now and then a hesitation.
      */
     public long gapMove(Board b, int fromCell, int toCell) {
-        if (!on()) return cfg.tapDelayMs;
+        if (!on()) return fast(cfg.tapDelayMs, MOVE_MIN_MS);
         double dist = 0;
         if (fromCell >= 0) {
             int dr = fromCell / b.cols - toCell / b.cols, dc = fromCell % b.cols - toCell % b.cols;
@@ -114,13 +136,13 @@ public class Humanizer {
         double fitts = (60 + 120 * Math.log(1 + dist) / Math.log(2)) * tempo();
         long gap = logNormal(cfg.tapDelayMs * tempo(), 0.25, 150, cfg.tapDelayMs * 5L) + Math.round(fitts);
         if (rnd.nextInt(100) < cfg.hesitationPct) gap += range(700, 3000);
-        return gap;
+        return fast(gap, MOVE_MIN_MS);
     }
 
     /** Pause before going back to fix something (noticing the mistake). */
     public long noticePause() {
         if (!on()) return 0;
-        return logNormal(450 * tempo(), 0.4, 150, 2500);
+        return scaled(logNormal(450 * tempo(), 0.4, 150, 2500));
     }
 
     /** "Reading the board" pause before the first tap; longer for harder boards. */
@@ -128,20 +150,20 @@ public class Humanizer {
         if (!on()) return 0;
         double difficulty = Math.min(1.0, neededTaps / 25.0);
         double median = cfg.thinkMinMs + (cfg.thinkMaxMs - cfg.thinkMinMs) * (0.25 + 0.75 * difficulty);
-        return logNormal(median * tempo(), 0.30, cfg.thinkMinMs / 2, cfg.thinkMaxMs * 2L);
+        return scaled(logNormal(median * tempo(), 0.30, cfg.thinkMinMs / 2, cfg.thinkMaxMs * 2L));
     }
 
     /** Reaction time before pressing the replay button. */
     public long reactionPause() {
         if (!on()) return 0;
         double median = (cfg.reactMinMs + cfg.reactMaxMs) / 2.0;
-        return logNormal(median * tempo(), 0.35, cfg.reactMinMs / 2, cfg.reactMaxMs * 2L);
+        return scaled(logNormal(median * tempo(), 0.35, cfg.reactMinMs / 2, cfg.reactMaxMs * 2L));
     }
 
     /** A rare long pause during a round (phone notification, looking away). 0 if none. */
     public long distraction() {
         if (!on() || rnd.nextInt(1000) >= cfg.distractionPct * 10) return 0;
-        return range(5000, 25000);
+        return scaled(range(5000, 25000));
     }
 
     /** If a break is due (checked between rounds), its length in ms; otherwise 0. */
@@ -156,8 +178,8 @@ public class Humanizer {
 
     /** Screen polling interval, jittered so reaction to a new screen isn't a fixed beat. */
     public long loopDelay() {
-        if (!on()) return cfg.loopMs;
-        return Math.round(cfg.loopMs * (0.7 + rnd.nextDouble() * 0.6));
+        if (!on()) return fast(cfg.loopMs, LOOP_MIN_MS);
+        return fast(Math.round(cfg.loopMs * (0.7 + rnd.nextDouble() * 0.6)), LOOP_MIN_MS);
     }
 
     /** Where a round starts: the leprechaun end, the gold end, or a stray tap somewhere else first. */

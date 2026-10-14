@@ -18,6 +18,8 @@ public class Config {
     public int edgeThreshold = 60;   // stripe brightness needed to call a tile side "open"
     public int xThreshold = 20;      // ad close-X detector score needed to tap it
 
+    /** Speed multiplier for all timing (1 = normal, 2 = twice as fast); the game's animation limits still apply. */
+    public float speed = 1.0f;
     public int tapDelayMs = 300;     // between taps (each rotation animates)
     public int settleMs = 800;       // after the last tap before re-checking
     public int loopMs = 700;
@@ -68,6 +70,7 @@ public class Config {
         k.tapDir = p.getInt("tapDir", k.tapDir);
         k.edgeThreshold = p.getInt("edgeThreshold", k.edgeThreshold);
         k.xThreshold = p.getInt("xThreshold", k.xThreshold);
+        k.speed = p.getFloat("speed", k.speed);
         k.tapDelayMs = p.getInt("tapDelayMs", k.tapDelayMs);
         k.settleMs = p.getInt("settleMs", k.settleMs);
         k.loopMs = p.getInt("loopMs", k.loopMs);
@@ -107,7 +110,7 @@ public class Config {
                 .putInt("tlX", tlX).putInt("tlY", tlY).putInt("brX", brX).putInt("brY", brY)
                 .putInt("tapDir", tapDir)
                 .putInt("edgeThreshold", edgeThreshold).putInt("xThreshold", xThreshold)
-                .putInt("tapDelayMs", tapDelayMs).putInt("settleMs", settleMs).putInt("loopMs", loopMs)
+                .putFloat("speed", speed).putInt("tapDelayMs", tapDelayMs).putInt("settleMs", settleMs).putInt("loopMs", loopMs)
                 .putString("playTexts", playTexts).putInt("replayGapSec", replayGapSec)
                 .putInt("adTimeoutSec", adTimeoutSec)
                 .putString("adClosePoints", adClosePoints)

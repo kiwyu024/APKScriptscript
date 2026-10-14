@@ -46,7 +46,19 @@ public class Overlay {
         startBtn.setOnClickListener(v -> toggle());
         Button gear = smallButton("⚙", 0xFF455A64);
         gear.setOnClickListener(v -> menu.setVisibility(menu.getVisibility() == View.VISIBLE ? View.GONE : View.VISIBLE));
+        Button speedBtn = smallButton(speedLabel(Config.load(svc).speed), 0xFF6D4C41);
+        speedBtn.setTextSize(13);
+        speedBtn.setOnClickListener(v -> {
+            float[] steps = {1f, 1.5f, 2f, 3f};
+            float cur = Config.load(svc).speed, next = steps[0];
+            for (int i = 0; i < steps.length; i++)
+                if (Math.abs(steps[i] - cur) < 0.01f) { next = steps[(i + 1) % steps.length]; break; }
+            svc.setSpeed(next);
+            speedBtn.setText(speedLabel(next));
+            setStatus("Speed " + speedLabel(next));
+        });
         row.addView(startBtn);
+        row.addView(speedBtn);
         row.addView(gear);
         root.addView(row);
 
@@ -116,6 +128,10 @@ public class Overlay {
         gear.setOnTouchListener(drag);
         root.setOnTouchListener(drag);
         wm.addView(root, lp);
+    }
+
+    static String speedLabel(float s) {
+        return (s == Math.round(s) ? String.valueOf(Math.round(s)) : String.valueOf(s)) + "x";
     }
 
     Button smallButton(String text, int color) {

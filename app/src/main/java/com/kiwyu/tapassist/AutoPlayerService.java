@@ -102,6 +102,14 @@ public class AutoPlayerService extends AccessibilityService {
         loop.start();
     }
 
+    /** Changes the speed setting, also for a bot that's already running. */
+    void setSpeed(float s) {
+        Config c = Config.load(this);
+        c.speed = s;
+        c.save(this);
+        if (loop != null) loop.cfg.speed = s;
+    }
+
     void stopLoop() {
         if (loop != null) loop.stop();
         loop = null;

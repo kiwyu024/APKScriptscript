@@ -60,6 +60,13 @@ public class MainActivity extends Activity {
         help.setPadding(0, pad / 2, 0, pad / 2);
         col.addView(help);
 
+        title("Speed");
+        dec("speed", "Speed (1 = normal, 1.5, 2, 3 …)", cfg.speed);
+        note("Speeds up every pause and tap gap. It never goes below what the game needs: 200 ms between taps on " +
+                "the same tile (a turn animates for ~120-175 ms), 400 ms before re-reading the board, ~3 screen " +
+                "checks a second. Mistake rates don't change. Breaks between rounds keep their length. " +
+                "Also switchable on the floating panel (the 1x button).");
+
         title("Puzzle");
         dir = spinner("Tap rotates", new String[]{"clockwise", "counter-clockwise", "learn (uses 1 tap)"},
                 cfg.tapDir > 0 ? "clockwise" : cfg.tapDir < 0 ? "counter-clockwise" : "learn (uses 1 tap)");
@@ -143,6 +150,7 @@ public class MainActivity extends Activity {
             int d = dir.getSelectedItemPosition();
             cfg.tapDir = d == 0 ? 1 : d == 1 ? -1 : 0;
             cfg.edgeThreshold = i("edgeThreshold");
+            cfg.speed = Math.max(0.25f, Math.min(10f, Float.parseFloat(fields.get("speed").getText().toString().trim())));
             cfg.tapDelayMs = i("tapDelayMs"); cfg.settleMs = i("settleMs"); cfg.loopMs = i("loopMs");
             cfg.playTexts = fields.get("playTexts").getText().toString();
             cfg.replayGapSec = i("replayGapSec");

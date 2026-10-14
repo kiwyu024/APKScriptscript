@@ -118,8 +118,9 @@ public class GameLoop implements Runnable {
         if (replay != null) {
             unknownSince = 0;
             long since = now - Math.max(lastReplayTap, adEndedAt);
-            if (since < cfg.replayGapSec * 1000L) {
-                svc.status("Result screen — waiting " + (cfg.replayGapSec - since / 1000) + "s");
+            long gap = human.fast(cfg.replayGapSec * 1000L, 2500);   // let the next board load first
+            if (since < gap) {
+                svc.status("Result screen — waiting " + ((gap - since) / 1000 + 1) + "s");
                 return;
             }
             if (replay[4] == 1 && !cfg.handleAds) {
@@ -137,7 +138,7 @@ public class GameLoop implements Runnable {
             lastTarget = null;
             attempts = 0;
             dumped = false;
-            AutoPlayerService.sleep(1500);
+            AutoPlayerService.sleep(human.fast(1500, 700));
             return;
         }
 
@@ -304,14 +305,14 @@ public class GameLoop implements Runnable {
         if (turns == null) {
             svc.status("No road found for the board as read — retrying");
             if (cfg.debugDump) DebugDump.save(svc, f, board, "no solution");
-            AutoPlayerService.sleep(1000);
+            AutoPlayerService.sleep(human.fast(1000, 400));
             return;
         }
         if (++attempts > 4) {
             svc.status("Board didn't end up as planned 4 times — pausing 5s");
             if (cfg.debugDump) DebugDump.save(svc, f, board, "retry limit");
             attempts = 0;
-            AutoPlayerService.sleep(5000);
+            AutoPlayerService.sleep(human.fast(5000, 1500));
             return;
         }
 
@@ -355,9 +356,9 @@ public class GameLoop implements Runnable {
             }
             prev = act.cell;
         }
-        AutoPlayerService.sleep(cfg.tapDelayMs);
+        AutoPlayerService.sleep(human.fast(cfg.tapDelayMs, Humanizer.MOVE_MIN_MS));
         lastTarget = target;
-        AutoPlayerService.sleep(cfg.settleMs);
+        AutoPlayerService.sleep(human.fast(cfg.settleMs, Humanizer.SETTLE_MIN_MS));
 
         Frame check = lastBoardRect != null && intersectsPanel() ? svc.screenshotWithoutPanel() : svc.screenshot();
         if (check == null) return;
@@ -393,7 +394,7 @@ public class GameLoop implements Runnable {
         int r = idx / board.cols, c = idx % board.cols, before = board.masks[idx];
         svc.status("Learning tap direction…");
         tap(board.cx(c), board.cy(r), board.pitchX / 2f, board.pitchY / 2f, "tile", "learn_direction");
-        AutoPlayerService.sleep(cfg.settleMs);
+        AutoPlayerService.sleep(human.fast(cfg.settleMs, Humanizer.SETTLE_MIN_MS));
         Frame f2 = lastBoardRect != null && intersectsPanel() ? svc.screenshotWithoutPanel() : svc.screenshot();
         if (f2 == null) return false;
         Vision.read(f2, board, cfg);
