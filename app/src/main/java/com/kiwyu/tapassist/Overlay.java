@@ -49,7 +49,7 @@ public class Overlay {
         Button speedBtn = smallButton(speedLabel(Config.load(svc).speed), 0xFF6D4C41);
         speedBtn.setTextSize(13);
         speedBtn.setOnClickListener(v -> {
-            float[] steps = {1f, 1.5f, 2f, 3f};
+            float[] steps = {1f, 1.25f, 1.5f, 2f, 3f};
             float cur = Config.load(svc).speed, next = steps[0];
             for (int i = 0; i < steps.length; i++)
                 if (Math.abs(steps[i] - cur) < 0.01f) { next = steps[(i + 1) % steps.length]; break; }
