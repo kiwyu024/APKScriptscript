@@ -170,6 +170,26 @@ public class AutoPlayerService extends AccessibilityService {
     }
 
     // -------------------------------------------------------------------- taps
+    /** Blocking swipe (call from a worker thread), e.g. to scroll a page. */
+    boolean swipe(int x1, int y1, int x2, int y2, int ms) {
+        Path path = new Path();
+        path.moveTo(x1, y1);
+        path.lineTo(x2, y2);
+        GestureDescription g = new GestureDescription.Builder()
+                .addStroke(new GestureDescription.StrokeDescription(path, 0, Math.max(50, ms))).build();
+        CountDownLatch latch = new CountDownLatch(1);
+        AtomicBoolean ok = new AtomicBoolean(false);
+        main.post(() -> {
+            boolean sent = dispatchGesture(g, new GestureResultCallback() {
+                @Override public void onCompleted(GestureDescription d) { ok.set(true); latch.countDown(); }
+                @Override public void onCancelled(GestureDescription d) { latch.countDown(); }
+            }, null);
+            if (!sent) latch.countDown();
+        });
+        try { latch.await(3, TimeUnit.SECONDS); } catch (InterruptedException ie) { Thread.currentThread().interrupt(); }
+        return ok.get();
+    }
+
     /** Blocking tap at screen coordinates (call from a worker thread). */
     boolean tap(int x, int y) { return tap(x, y, 40, 0, 0); }
 

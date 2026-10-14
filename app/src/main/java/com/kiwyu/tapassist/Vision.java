@@ -280,4 +280,84 @@ public class Vision {
         for (int i = 0; i < n; i++) s += (v[i] - m) * (v[i] - m);
         return (float) Math.sqrt(s / n);
     }
+
+    // ------------------------------------------------------- mine screen (recovery)
+    static boolean mineBrown(int p) {
+        return Math.abs(Frame.r(p) - 139) < 22 && Math.abs(Frame.g(p) - 69) < 22 && Frame.b(p) < 50;
+    }
+
+    /** Fraction of a row (sampled) that is the Gold Mine header brown. */
+    static float brownRow(Frame f, int y) {
+        int n = 0, hit = 0;
+        for (int x = 0; x < f.w; x += 4) { n++; if (mineBrown(f.get(x, y))) hit++; }
+        return hit / (float) n;
+    }
+
+    /** The Gold Mine screen (the one with ENTER MINE): its brown header bar across the top. */
+    public static boolean isMineScreen(Frame f) {
+        return brownRow(f, Math.round(f.h * 0.045f)) > 0.80f && brownRow(f, Math.round(f.h * 0.088f)) > 0.80f;
+    }
+
+    /** The orange-brown ENTER MINE button: {x, y} or null. */
+    public static int[] findEnterMine(Frame f) {
+        int first = -1, last = -1, rows = 0;
+        long sumMid = 0;
+        int prevY = -1000;
+        int[] best = null;
+        int bestRows = 0;
+        for (int y = Math.round(f.h * 0.15f); y < Math.round(f.h * 0.93f); y += 2) {
+            // longest run of button brown in this row
+            int run = 0, bestRun = 0, bestEnd = -1;
+            for (int x = 0; x < f.w; x++) {
+                if (mineBrown(f.px[y * f.w + x])) { run++; if (run > bestRun) { bestRun = run; bestEnd = x; } }
+                else run = 0;
+            }
+            boolean ok = false;
+            int x0 = bestEnd - bestRun + 1;
+            if (bestRun >= f.w * 0.10f && bestRun <= f.w * 0.48f) {
+                // a button: dark panel on both sides (not a full-width header bar)
+                int l = f.get(Math.max(0, x0 - 12), y), r = f.get(Math.min(f.w - 1, bestEnd + 12), y);
+                ok = Frame.r(l) < 100 && Frame.r(r) < 100;
+            }
+            if (!ok) continue;
+            if (y - prevY > 40) {   // new cluster
+                if (rows > bestRows && last - first >= f.h * 0.03f) { bestRows = rows; best = new int[]{(int) (sumMid / rows), (first + last) / 2}; }
+                first = y; rows = 0; sumMid = 0;
+            }
+            last = y; prevY = y; rows++;
+            sumMid += x0 + (bestEnd - x0) / 2;
+        }
+        if (rows > bestRows && last - first >= f.h * 0.03f) best = new int[]{(int) (sumMid / rows), (first + last) / 2};
+        return best;
+    }
+
+    /** The grey "Name Your Mine!" style dialog: position of its teal GOT IT! button, or null. */
+    public static int[] findGotIt(Frame f) {
+        int cx = f.w / 2, run = 0, bestRun = 0, bestEnd = -1;
+        for (int y = 0; y < f.h; y++) {
+            int p = f.get(cx, y);
+            boolean grey = Math.abs(Frame.r(p) - 66) < 12 && Math.abs(Frame.g(p) - 66) < 12 && Math.abs(Frame.b(p) - 66) < 12;
+            if (grey) { run++; if (run > bestRun) { bestRun = run; bestEnd = y; } }
+            else run = 0;
+        }
+        if (bestRun < f.h * 0.08f) return null;
+        int top = bestEnd - bestRun + 1, bottom = bestEnd;
+        // dialog must be wide
+        int mid = (top + bottom) / 2, wide = 0;
+        for (int x = 0; x < f.w; x += 2) {
+            int p = f.get(x, mid);
+            if (Math.abs(Frame.r(p) - 66) < 12 && Math.abs(Frame.g(p) - 66) < 12 && Math.abs(Frame.b(p) - 66) < 12) wide += 2;
+        }
+        if (wide < f.w * 0.75f) return null;
+        // teal button text in the lower right of the dialog
+        long sx = 0, sy = 0;
+        int n = 0;
+        for (int y = Math.max(top, bottom - Math.round(f.h * 0.07f)); y <= bottom; y++)
+            for (int x = f.w / 2; x < f.w; x++) {
+                int p = f.px[y * f.w + x];
+                if (Frame.g(p) > 150 && Frame.b(p) > 150 && Frame.r(p) < 170 && Frame.g(p) - Frame.r(p) > 30) { sx += x; sy += y; n++; }
+            }
+        if (n < 30) return null;
+        return new int[]{(int) (sx / n), (int) (sy / n)};
+    }
 }

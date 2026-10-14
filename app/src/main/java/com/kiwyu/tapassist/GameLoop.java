@@ -107,6 +107,11 @@ public class GameLoop implements Runnable {
             lastBoardRect = new Rect(board.left, board.top, board.left + board.size, board.top + board.size);
         }
         boolean adFg = svc.adInForeground();
+
+        // Thrown back to the Gold Mine screen: dismiss its dialog, scroll down and tap ENTER MINE.
+        // (checked before the replay button: the Mine screen's orange "DOUBLE REWARD" band could pass for one)
+        if (!adFg && board == null && recoverToMine(f)) return;
+
         int[] replay = adFg ? null : findReplay(f, board);
 
         if (adFg || (board == null && replay == null && (now < expectAdUntil || adStart > 0))) {
@@ -195,6 +200,80 @@ public class GameLoop implements Runnable {
             if (m.find()) return Integer.parseInt(m.group(1));
         }
         return -1;
+    }
+
+    int mineScrolls = 0;
+
+    /** First visible node containing one of the labels, as {x, y}, or null. */
+    int[] nodeCenter(Frame f, String... labels) {
+        for (AccessibilityNodeInfo n : svc.findNodes(labels, false)) {
+            Rect r = new Rect();
+            n.getBoundsInScreen(r);
+            if (r.isEmpty() || r.bottom < 0 || r.top > f.h) continue;
+            return new int[]{r.centerX(), r.centerY(), Math.max(1, r.width() / 2), Math.max(1, r.height() / 2)};
+        }
+        return null;
+    }
+
+    void endFalseAd() {
+        adStart = 0;
+        expectAdUntil = 0;
+        adFallbackTries = 0;
+    }
+
+    /**
+     * Recovery when the game ends up on the Gold Mine screen instead of the puzzle: tap GOT IT! on its
+     * "Name Your Mine!" dialog, scroll down until ENTER MINE shows, and tap it. Uses the game's own button
+     * labels when readable, otherwise the colours measured from screenshots. Returns true if it acted.
+     */
+    boolean recoverToMine(Frame f) {
+        int[] got = nodeCenter(f, "got it");
+        if (got == null) {
+            int[] v = Vision.findGotIt(f);
+            if (v != null) got = new int[]{v[0], v[1], 30, 12};
+        }
+        if (got != null) {
+            endFalseAd();
+            svc.status("Mine screen: closing the dialog");
+            if (cfg.logTaps) log.event("mine screen: dialog, tapping GOT IT");
+            AutoPlayerService.sleep(human.fast(human.reactionPause() + 400, 300));
+            tap(got[0], got[1], got[2] * 0.6f, got[3] * 0.6f, "nav", "got_it");
+            AutoPlayerService.sleep(human.fast(1200, 600));
+            return true;
+        }
+        int[] enter = nodeCenter(f, "enter mine");
+        if (enter == null) {
+            int[] v = Vision.findEnterMine(f);
+            if (v != null) enter = new int[]{v[0], v[1], Math.round(f.w * 0.15f), Math.round(f.h * 0.018f)};
+        }
+        if (enter != null) {
+            endFalseAd();
+            mineScrolls = 0;
+            svc.status("Mine screen: tapping ENTER MINE");
+            if (cfg.logTaps) log.event("mine screen: tapping ENTER MINE");
+            AutoPlayerService.sleep(human.fast(human.reactionPause() + 400, 300));
+            tap(enter[0], enter[1], enter[2] * 0.6f, enter[3] * 0.6f, "nav", "enter_mine");
+            lastTarget = null;
+            solvedWaiting = false;
+            attempts = 0;
+            dumped = false;
+            AutoPlayerService.sleep(human.fast(2500, 1200));
+            return true;
+        }
+        if (Vision.isMineScreen(f) || nodeCenter(f, "mine entrance") != null) {
+            endFalseAd();
+            // scroll down to the Mine Entrance (back up again if it was overshot)
+            boolean down = (mineScrolls / 6) % 2 == 0;
+            int x = Math.round(f.w * 0.35f);
+            int a = Math.round(f.h * 0.70f), b = Math.round(f.h * 0.38f);
+            svc.status("Mine screen: scrolling to ENTER MINE");
+            if (cfg.logTaps) log.event("mine screen: scrolling " + (down ? "down" : "up"));
+            svc.swipe(x, down ? a : b, x + (int) (Math.random() * 20 - 10), down ? b : a, 350 + (int) (Math.random() * 150));
+            mineScrolls++;
+            AutoPlayerService.sleep(human.fast(900, 500));
+            return true;
+        }
+        return false;
     }
 
     // ----------------------------------------------------------------- states
