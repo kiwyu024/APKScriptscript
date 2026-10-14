@@ -97,6 +97,7 @@ public class Overlay {
         android.content.SharedPreferences p = svc.getSharedPreferences(Config.PREFS, 0);
         lp.x = p.getInt("panelX", dp(4));
         lp.y = p.getInt("panelY", dp(60));
+        clamp();   // a position saved off-screen comes back into view
 
         // Drag by grabbing anywhere on the panel background or buttons.
         View.OnTouchListener drag = new View.OnTouchListener() {
@@ -111,6 +112,7 @@ public class Overlay {
                         if (!moved && Math.hypot(dx, dy) < dp(8)) return false;
                         moved = true;
                         lp.x = ox - Math.round(dx); lp.y = oy - Math.round(dy);   // measured from bottom-right
+                        clamp();
                         wm.updateViewLayout(root, lp);
                         return true;
                     case MotionEvent.ACTION_UP:
@@ -217,6 +219,25 @@ public class Overlay {
         if (root == null) return;
         if (on) lp.flags |= WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE;
         else lp.flags &= ~WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE;
+        try { wm.updateViewLayout(root, lp); } catch (Exception ignored) { }
+    }
+
+    /** Keeps the panel on screen (so it can always be grabbed again). */
+    void clamp() {
+        android.util.DisplayMetrics dm = svc.getResources().getDisplayMetrics();
+        int w = root != null && root.getWidth() > 0 ? root.getWidth() : dp(110);
+        int h = root != null && root.getHeight() > 0 ? root.getHeight() : dp(70);
+        lp.x = Math.max(0, Math.min(lp.x, dm.widthPixels - w));
+        lp.y = Math.max(0, Math.min(lp.y, dm.heightPixels - h));
+    }
+
+    /** Puts the panel back in its default spot (bottom-right, over the game's Settings tab). */
+    void resetPosition() {
+        if (root == null) return;
+        lp.x = dp(4);
+        lp.y = dp(60);
+        svc.getSharedPreferences(Config.PREFS, 0).edit().putInt("panelX", lp.x).putInt("panelY", lp.y).apply();
+        root.setVisibility(View.VISIBLE);
         try { wm.updateViewLayout(root, lp); } catch (Exception ignored) { }
     }
 

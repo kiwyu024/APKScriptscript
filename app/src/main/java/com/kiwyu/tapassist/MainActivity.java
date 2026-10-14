@@ -127,6 +127,12 @@ public class MainActivity extends Activity {
         debug = check("Save debug images while running", cfg.debugDump);
 
         button("Save", this::save);
+        button("Reset floating panel position", () -> {
+            getSharedPreferences(Config.PREFS, MODE_PRIVATE).edit().remove("panelX").remove("panelY").apply();
+            AutoPlayerService s = AutoPlayerService.instance;
+            if (s != null && s.overlay != null) s.overlay.resetPosition();
+            Toast.makeText(this, "Panel moved back to the bottom-right", Toast.LENGTH_SHORT).show();
+        });
         button("Clear manual grid", () -> {
             cfg.tlX = cfg.tlY = cfg.brX = cfg.brY = -1;
             cfg.save(this);
