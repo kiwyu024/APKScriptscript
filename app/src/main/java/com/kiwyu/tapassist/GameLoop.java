@@ -32,9 +32,6 @@ public class GameLoop implements Runnable {
     boolean solvedWaiting;     // board solved; wait for the result screen
     long solvedAt = 0;
     int attempts = 0;
-    boolean panelMoved = false;
-    int sameRetry = 0;          // retries in a row that came back to the same single tile
-    int lastRetryCell = -1;
     int solvedCount = 0;
     boolean dumped = false;
 
@@ -108,11 +105,6 @@ public class GameLoop implements Runnable {
                 if (board == null) return;
             }
             lastBoardRect = new Rect(board.left, board.top, board.left + board.size, board.top + board.size);
-            // keep the panel off the board: it shows up in screenshots and can catch taps
-            if (!panelMoved && svc.movePanelOffIfOver(lastBoardRect)) {
-                panelMoved = true;
-                if (cfg.logTaps) log.event("panel was over the board; moved it back to the bottom-right");
-            }
         }
         boolean adFg = svc.adInForeground();
         int[] replay = adFg ? null : findReplay(f, board);
@@ -315,21 +307,10 @@ public class GameLoop implements Runnable {
             AutoPlayerService.sleep(1000);
             return;
         }
-        // a tile that keeps "not turning" usually means taps aren't landing on it
-        if (attempts >= 1 && turns != null) {
-            int only = -1, count = 0;
-            for (int i = 0; i < turns.length; i++) if (turns[i] != 0) { only = i; count++; }
-            if (count == 1 && only == lastRetryCell) {
-                sameRetry++;
-                if (cfg.logTaps) log.event("tile " + only / board.cols + ":" + only % board.cols
-                        + " still needs turning after being tapped (" + sameRetry + "x)");
-            } else sameRetry = 0;
-            lastRetryCell = count == 1 ? only : -1;
-        }
         if (++attempts > 4) {
             svc.status("Board didn't end up as planned 4 times — pausing 5s");
             if (cfg.debugDump) DebugDump.save(svc, f, board, "retry limit");
-            attempts = 1;   // still the same puzzle: the next try stays a clean retry
+            attempts = 0;
             AutoPlayerService.sleep(5000);
             return;
         }

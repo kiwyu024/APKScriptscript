@@ -204,15 +204,6 @@ public class Overlay {
         try { wm.updateViewLayout(root, lp); } catch (Exception ignored) { }
     }
 
-    /** Puts the panel back in its default spot (bottom-right, over the game's Settings tab). */
-    void resetPosition() {
-        if (root == null) return;
-        lp.x = dp(4);
-        lp.y = dp(60);
-        svc.getSharedPreferences(Config.PREFS, 0).edit().putInt("panelX", lp.x).putInt("panelY", lp.y).apply();
-        try { wm.updateViewLayout(root, lp); } catch (Exception ignored) { }
-    }
-
     void setVisible(boolean v) { if (root != null) root.setVisibility(v ? View.VISIBLE : View.GONE); }
 
     void hide() {

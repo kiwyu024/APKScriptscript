@@ -162,23 +162,6 @@ public class AutoPlayerService extends AccessibilityService {
     }
 
     // -------------------------------------------------------------------- taps
-    volatile boolean passThroughOn = false;
-    final Runnable passThroughOff = () -> {
-        passThroughOn = false;
-        if (overlay != null) overlay.setPassThrough(false);
-    };
-
-    /** Moves the panel back to its default spot if it sits over the given area. True if it was moved. */
-    boolean movePanelOffIfOver(Rect area) {
-        Rect pr = panelRect();
-        if (pr == null || !Rect.intersects(pr, area)) return false;
-        CountDownLatch done = new CountDownLatch(1);
-        main.post(() -> { if (overlay != null) overlay.resetPosition(); done.countDown(); });
-        try { done.await(1, TimeUnit.SECONDS); } catch (InterruptedException ie) { Thread.currentThread().interrupt(); }
-        sleep(200);
-        return true;
-    }
-
     /** Blocking tap at screen coordinates (call from a worker thread). */
     boolean tap(int x, int y) { return tap(x, y, 40, 0, 0); }
 
@@ -189,23 +172,10 @@ public class AutoPlayerService extends AccessibilityService {
         if (dx != 0 || dy != 0) path.lineTo(Math.max(0, x + dx), Math.max(0, y + dy));
         GestureDescription g = new GestureDescription.Builder()
                 .addStroke(new GestureDescription.StrokeDescription(path, 0, Math.max(1, pressMs))).build();
-        // A tap under the floating panel would be caught by the panel. Make it let touches through and
-        // wait for that to take effect before tapping (the window change is applied asynchronously);
-        // it stays that way until taps stop for a moment.
-        Rect pr = panelRect();
-        if (pr != null) {
-            pr.inset(-24, -24);
-            if (pr.contains(x, y) && !passThroughOn) {
-                CountDownLatch applied = new CountDownLatch(1);
-                main.post(() -> { if (overlay != null) overlay.setPassThrough(true); applied.countDown(); });
-                try { applied.await(1, TimeUnit.SECONDS); } catch (InterruptedException ie) { Thread.currentThread().interrupt(); }
-                passThroughOn = true;
-                sleep(150);
-            }
-        }
         AtomicBoolean ok = new AtomicBoolean(false);
         CountDownLatch latch = new CountDownLatch(1);
         main.post(() -> {
+            if (overlay != null) overlay.setPassThrough(true);
             boolean sent = dispatchGesture(g, new GestureResultCallback() {
                 @Override public void onCompleted(GestureDescription d) { ok.set(true); latch.countDown(); }
                 @Override public void onCancelled(GestureDescription d) { latch.countDown(); }
@@ -213,10 +183,7 @@ public class AutoPlayerService extends AccessibilityService {
             if (!sent) latch.countDown();
         });
         try { latch.await(2, TimeUnit.SECONDS); } catch (InterruptedException ie) { Thread.currentThread().interrupt(); }
-        if (passThroughOn) {
-            main.removeCallbacks(passThroughOff);
-            main.postDelayed(passThroughOff, 1500);
-        }
+        main.post(() -> { if (overlay != null) overlay.setPassThrough(false); });
         return ok.get();
     }
 
