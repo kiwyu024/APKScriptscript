@@ -30,6 +30,9 @@ public class CollectLoop implements Runnable, BotLoop {
     int collected = 0, alreadyDone = 0, opened = 0;
     int unknownTicks = 0, mineScrolls = 0, actionTaps = 0, listStill = 0, loadingTicks = 0;
     String lastListKeys = "";
+    Frame lastListFrame = null;
+    boolean collectedHere = false;   // collected at the current property (its 0/3 afterwards is ours)
+    static final Pattern REMAINING = Pattern.compile("(\\d[\\d,]*)\\s*remaining");
 
     static final Pattern BADGE = Pattern.compile("^(\\d+)\\s*/\\s*(\\d+)$");
     static final Pattern COORDS = Pattern.compile("^-?\\d{1,3}\\.\\d+\\s*,\\s*-?\\d{1,3}\\.\\d+$");
@@ -205,6 +208,7 @@ public class CollectLoop implements Runnable, BotLoop {
         svc.status("Collecting rewards " + reward);
         if (tapped) {
             collected++;
+            collectedHere = true;
             if (cfg.logTaps) log.event("collected " + (reward.isEmpty() ? "?" : reward) + " at " + current);
             AutoPlayerService.sleep(human.fast(1200, 600));
         }
@@ -325,10 +329,15 @@ public class CollectLoop implements Runnable, BotLoop {
         int[] badge = b.get(0);
         if (badge[0] == 0) {
             mineScrolls = 0;
-            alreadyDone++;
-            svc.status("Already collected (0/" + badge[1] + ") — next mine");
-            if (cfg.logTaps) log.event("already collected (0/" + badge[1] + ") at " + current);
-            back(st, f, "mine already collected");
+            if (collectedHere) {
+                svc.status("Collected here (now 0/" + badge[1] + ") — next mine");
+                back(st, f, "mine done after collecting");
+            } else {
+                alreadyDone++;
+                svc.status("Already collected (0/" + badge[1] + ") — next mine");
+                if (cfg.logTaps) log.event("already collected (0/" + badge[1] + ") at " + current);
+                back(st, f, "mine already collected");
+            }
             AutoPlayerService.sleep(human.fast(900, 500));
             return;
         }
@@ -364,6 +373,9 @@ public class CollectLoop implements Runnable, BotLoop {
             int y = card[0] != null ? (card[0].cy() + card[1].cy()) / 2 : card[1].cy();
             if (y < f.h * 0.18f || y > f.h * 0.86f) continue;   // only cards fully on screen
             visited.add(key);
+            collectedHere = false;
+            lastListFrame = null;
+            listStill = 0;
             current = (card[0] != null ? card[0].text + " " : "") + card[1].text;
             opened++;
             listStill = 0;
@@ -376,22 +388,75 @@ public class CollectLoop implements Runnable, BotLoop {
         }
         // nothing new on screen: load more, or scroll on
         ScreenText.Item more = st.find("load 20 more", "load more");
-        if (more != null && more.cy() < f.h * 0.88f) {
+        if (more != null && more.cy() > f.h * 0.15f && more.cy() < f.h * 0.88f) {
             svc.status("Loading more properties");
+            if (cfg.logTaps) log.event("list: load more (" + more.text + ")");
             tapItem(more, "load_more");
             AutoPlayerService.sleep(human.fast(1800, 900));
+            lastListFrame = null;
+            listStill = 0;
             return;
         }
+        // did the last scroll actually move anything? judged from the picture, because the game's
+        // accessibility text can lag behind a scroll
+        android.graphics.Rect panel = svc.panelRect();   // its status text changes every tick: ignore it
+        boolean moved = lastListFrame == null || frameChanged(lastListFrame, f,
+                panel == null ? null : new int[]{panel.left, panel.top, panel.right, panel.bottom});
         String k = keys.toString();
-        if (k.equals(lastListKeys)) listStill++;
+        if (!moved) listStill++;
         else listStill = 0;
+        if (cfg.logTaps) log.event("list: " + cards.size() + " cards [" + k + "] moved=" + moved + " still=" + listStill
+                + " src=" + st.source + (more != null ? " more@" + more.cy() : ""));
+        if (moved && k.equals(lastListKeys) && !k.isEmpty() && "accessibility".equals(st.source)) {
+            // the picture moved but the text didn't: read this screen with OCR instead
+            ScreenText o = ScreenText.read(svc, f, true);
+            if (!cards(o, f.w, f.h).isEmpty()) {
+                if (cfg.logTaps) log.event("list: accessibility text stale, using OCR");
+                lastListKeys = "";
+                lastListFrame = null;
+                onList(o, f);
+                return;
+            }
+        }
         lastListKeys = k;
+        lastListFrame = f;
         if (listStill >= 3) {
+            int remaining = remainingCount(st);
+            if (remaining > 0 && listStill < 8) {
+                // the list says there's more but swiping isn't moving it: ask it to scroll directly
+                svc.status("List stuck (" + remaining + " remaining) — trying another scroll");
+                if (cfg.logTaps) log.event("list: stuck with " + remaining + " remaining, accessibility scroll");
+                if (!svc.scrollForward()) swipeUp(f, 0.55f);
+                AutoPlayerService.sleep(human.fast(900, 500));
+                return;
+            }
             finishPass();
             return;
         }
         svc.status("Scrolling the list (" + visited.size() + " checked, " + collected + " collected)");
         swipeUp(f, 0.38f);
+    }
+
+    static int remainingCount(ScreenText st) {
+        for (ScreenText.Item it : st.items) {
+            java.util.regex.Matcher m = REMAINING.matcher(it.lower);
+            if (m.find()) try { return Integer.parseInt(m.group(1).replace(",", "")); } catch (NumberFormatException ignored) { }
+        }
+        return -1;
+    }
+
+    /** True when the list area of two screenshots differs noticeably (it scrolled). */
+    static boolean frameChanged(Frame a, Frame b, int[] skip) {
+        if (a.w != b.w || a.h != b.h) return true;
+        int diff = 0, n = 0;
+        for (int y = Math.round(a.h * 0.20f); y < Math.round(a.h * 0.85f); y += 9)
+            for (int x = 0; x < a.w; x += 9) {
+                if (skip != null && x >= skip[0] && x < skip[2] && y >= skip[1] && y < skip[3]) continue;
+                int p = a.px[y * a.w + x], q = b.px[y * a.w + x];
+                n++;
+                if (Math.abs(Frame.r(p) - Frame.r(q)) + Math.abs(Frame.g(p) - Frame.g(q)) + Math.abs(Frame.b(p) - Frame.b(q)) > 60) diff++;
+            }
+        return diff > n * 0.03f;
     }
 
     void finishPass() {
@@ -406,6 +471,7 @@ public class CollectLoop implements Runnable, BotLoop {
         visited.clear();
         listStill = 0;
         lastListKeys = "";
+        lastListFrame = null;
         svc.status("Starting a new pass — scroll to the top of the list");
         if (cfg.logTaps) log.event("new pass");
         // back to the top of the list

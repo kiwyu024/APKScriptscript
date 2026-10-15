@@ -263,4 +263,31 @@ public class AutoPlayerService extends AccessibilityService {
     static void sleep(long ms) {
         try { Thread.sleep(ms); } catch (InterruptedException ignored) { Thread.currentThread().interrupt(); }
     }
+
+    /** Accessibility "scroll forward" on the biggest scrollable view in the game (fallback when swipes don't move it). */
+    boolean scrollForward() {
+        List<AccessibilityWindowInfo> wins;
+        try { wins = getWindows(); } catch (Exception e) { return false; }
+        AccessibilityNodeInfo best = null;
+        long bestArea = 0;
+        for (AccessibilityWindowInfo w : wins) {
+            if (w.getType() != AccessibilityWindowInfo.TYPE_APPLICATION) continue;
+            AccessibilityNodeInfo root = w.getRoot();
+            if (root == null || (root.getPackageName() != null && root.getPackageName().toString().equals(getPackageName()))) continue;
+            java.util.ArrayDeque<AccessibilityNodeInfo> q = new java.util.ArrayDeque<>();
+            q.add(root);
+            int seen = 0;
+            while (!q.isEmpty() && seen++ < 3000) {
+                AccessibilityNodeInfo n = q.poll();
+                if (n.isScrollable()) {
+                    android.graphics.Rect r = new android.graphics.Rect();
+                    n.getBoundsInScreen(r);
+                    long area = (long) r.width() * r.height();
+                    if (area > bestArea) { bestArea = area; best = n; }
+                }
+                for (int i = 0; i < n.getChildCount(); i++) { AccessibilityNodeInfo c = n.getChild(i); if (c != null) q.add(c); }
+            }
+        }
+        return best != null && best.performAction(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD);
+    }
 }
