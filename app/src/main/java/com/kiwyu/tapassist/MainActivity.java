@@ -25,7 +25,7 @@ public class MainActivity extends Activity {
     TextView serviceState;
     final Map<String, EditText> fields = new LinkedHashMap<>();
     Spinner dir;
-    CheckBox back, debug, humanize, logTaps, handleAds, takeBreaks, mistakes;
+    CheckBox back, debug, humanize, logTaps, handleAds, takeBreaks, mistakes, collectHumanize, collectBreaks;
 
     static final String HELP =
             "Setup (one time):\n" +
@@ -66,6 +66,17 @@ public class MainActivity extends Activity {
                 "skips ones at 0/3, scrolls and taps 'Load 20 More', and finds its way back if it gets lost. " +
                 "It never taps Watch Ad, Edit, Refer, Logout or ENTER MINE.");
         num("collectRepeatMin", "After a full pass, start again after (minutes)", cfg.collectRepeatMin);
+        collectHumanize = check("Humanize the collector", cfg.collectHumanize);
+        note("Taps land anywhere on the button or card (each session has its own habitual spot), presses and " +
+                "pauses vary, it looks at each reward before collecting, swipes are uneven curved flicks, it sometimes " +
+                "opens the 2nd card first and sometimes uses the phone's Back instead of ← Back.");
+        num("collectSysBackPct", "Use the phone's Back instead of ← Back (%)", cfg.collectSysBackPct);
+        num("collectSkipPct", "Open the 2nd card on screen first (%)", cfg.collectSkipPct);
+        collectBreaks = check("Take breaks while collecting", cfg.collectBreaks);
+        num("collectBreakEveryMin", "Break after at least (properties)", cfg.collectBreakEveryMin);
+        num("collectBreakEveryMax", "… and at most (properties)", cfg.collectBreakEveryMax);
+        num("collectBreakMinSec", "Break length min (seconds)", cfg.collectBreakMinSec);
+        num("collectBreakMaxSec", "Break length max (seconds)", cfg.collectBreakMaxSec);
 
         title("Speed");
         dec("speed", "Speed (1 = normal, 1.5, 2, 3 …)", cfg.speed);
@@ -165,6 +176,14 @@ public class MainActivity extends Activity {
             cfg.edgeThreshold = i("edgeThreshold");
             cfg.speed = Math.max(0.25f, Math.min(10f, Float.parseFloat(fields.get("speed").getText().toString().trim())));
             cfg.collectRepeatMin = i("collectRepeatMin");
+            cfg.collectHumanize = collectHumanize.isChecked();
+            cfg.collectBreaks = collectBreaks.isChecked();
+            cfg.collectSysBackPct = Math.max(0, Math.min(100, i("collectSysBackPct")));
+            cfg.collectSkipPct = Math.max(0, Math.min(100, i("collectSkipPct")));
+            cfg.collectBreakEveryMin = Math.max(1, i("collectBreakEveryMin"));
+            cfg.collectBreakEveryMax = Math.max(cfg.collectBreakEveryMin, i("collectBreakEveryMax"));
+            cfg.collectBreakMinSec = Math.max(0, i("collectBreakMinSec"));
+            cfg.collectBreakMaxSec = Math.max(cfg.collectBreakMinSec, i("collectBreakMaxSec"));
             cfg.tapDelayMs = i("tapDelayMs"); cfg.settleMs = i("settleMs"); cfg.loopMs = i("loopMs");
             cfg.playTexts = fields.get("playTexts").getText().toString();
             cfg.replayGapSec = i("replayGapSec");

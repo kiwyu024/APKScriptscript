@@ -49,6 +49,12 @@ What it does:
 - If it lands on a screen it doesn't recognise it presses Back / taps Profile to get back
   to the Properties list.
 
+Humanized collecting (main screen → "Humanize the collector", on by default): taps land anywhere on
+the button/card around a per-session habitual spot, press length and pauses vary, it looks at each
+reward before collecting, swipes are curved flicks of varied length/speed (sometimes nudged back),
+it sometimes opens the 2nd unopened card first and sometimes uses the phone's Back, has rare short
+distractions and takes a 30 s–3 min break every 20–60 properties (all adjustable).
+
 Screens are recognised from the game's accessibility text; if the game doesn't expose
 any, it falls back to on-device OCR (ML Kit). ⚙ → **Read screen text** shows which one is
 working on your phone.

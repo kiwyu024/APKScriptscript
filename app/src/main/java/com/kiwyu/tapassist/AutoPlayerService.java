@@ -171,10 +171,14 @@ public class AutoPlayerService extends AccessibilityService {
 
     // -------------------------------------------------------------------- taps
     /** Blocking swipe (call from a worker thread), e.g. to scroll a page. */
-    boolean swipe(int x1, int y1, int x2, int y2, int ms) {
+    boolean swipe(int x1, int y1, int x2, int y2, int ms) { return swipe(x1, y1, x2, y2, 0, ms); }
+
+    /** Swipe along a gentle arc: {@code bend} px sideways at the middle (a thumb doesn't move in a straight line). */
+    boolean swipe(int x1, int y1, int x2, int y2, int bend, int ms) {
         Path path = new Path();
         path.moveTo(x1, y1);
-        path.lineTo(x2, y2);
+        if (bend == 0) path.lineTo(x2, y2);
+        else path.quadTo((x1 + x2) / 2f + bend, (y1 + y2) / 2f, x2, y2);
         GestureDescription g = new GestureDescription.Builder()
                 .addStroke(new GestureDescription.StrokeDescription(path, 0, Math.max(50, ms))).build();
         CountDownLatch latch = new CountDownLatch(1);

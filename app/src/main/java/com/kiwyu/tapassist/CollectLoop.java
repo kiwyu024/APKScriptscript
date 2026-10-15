@@ -46,6 +46,36 @@ public class CollectLoop implements Runnable, BotLoop {
         this.svc = svc;
         this.cfg = cfg;
         this.human = new Humanizer(cfg);
+        this.human.force = cfg.collectHumanize;
+        nextBreakAt = cfg.collectBreakEveryMin + (int) (Math.random() * Math.max(1, cfg.collectBreakEveryMax - cfg.collectBreakEveryMin + 1));
+    }
+
+    int sinceBreak = 0, nextBreakAt;
+
+    /** After each property: now and then a short distraction, and every 20-60 properties a real break. */
+    void maybeRest() {
+        if (!cfg.collectHumanize) return;
+        long d = human.distraction();
+        if (d > 0) {
+            svc.status("Pause (" + d / 1000 + " s)");
+            if (cfg.logTaps) log.event("distraction " + d / 1000 + " s");
+            sleepWhileRunning(d);
+        }
+        if (!cfg.collectBreaks || ++sinceBreak < nextBreakAt) return;
+        long ms = (cfg.collectBreakMinSec + (long) (Math.random() * Math.max(1, cfg.collectBreakMaxSec - cfg.collectBreakMinSec + 1))) * 1000L;
+        if (cfg.logTaps) log.event("break " + ms / 1000 + " s after " + sinceBreak + " properties");
+        long end = System.currentTimeMillis() + ms;
+        while (running && System.currentTimeMillis() < end) {
+            svc.status("Break — back in " + ((end - System.currentTimeMillis()) / 1000 + 1) + " s");
+            AutoPlayerService.sleep(1000);
+        }
+        sinceBreak = 0;
+        nextBreakAt = cfg.collectBreakEveryMin + (int) (Math.random() * Math.max(1, cfg.collectBreakEveryMax - cfg.collectBreakEveryMin + 1));
+    }
+
+    void sleepWhileRunning(long ms) {
+        long end = System.currentTimeMillis() + ms;
+        while (running && System.currentTimeMillis() < end) AutoPlayerService.sleep(Math.min(500, end - System.currentTimeMillis()));
     }
 
     @Override public Config config() { return cfg; }
@@ -89,7 +119,7 @@ public class CollectLoop implements Runnable, BotLoop {
     }
 
     void tapAt(int x, int y, float hw, float hh, String kind, String detail) {
-        int[] p = human.point(x, y, hw, hh);
+        int[] p = human.pointWide(x, y, hw, hh);
         int press = human.pressMs();
         int[] d = human.drift();
         svc.tap(p[0], p[1], press, d[0], d[1]);
@@ -100,7 +130,7 @@ public class CollectLoop implements Runnable, BotLoop {
     boolean tapItem(ScreenText.Item it, String kind) {
         if (it == null || blocked(it.lower)) return false;
         pause();
-        tapAt(it.cx(), it.cy(), Math.max(6, it.width() / 3f), Math.max(4, it.height() / 3f), kind, it.text);
+        tapAt(it.cx(), it.cy(), Math.max(6, it.width() / 2f), Math.max(4, it.height() / 2f), kind, it.text);
         return true;
     }
 
@@ -108,16 +138,40 @@ public class CollectLoop implements Runnable, BotLoop {
         ScreenText.Item b = null;
         for (ScreenText.Item it : st.items)
             if (it.lower.replace("←", "").trim().equals("back") && it.cy() < f.h * 0.15f) { b = it; break; }
-        if (b != null) tapItem(b, "nav_back");
-        else { pause(); svc.performGlobalAction(AccessibilityService.GLOBAL_ACTION_BACK); }
+        if (b != null && !human.chance(cfg.collectSysBackPct)) tapItem(b, "nav_back");
+        else {   // the phone's own Back (a person uses both)
+            pause();
+            svc.performGlobalAction(AccessibilityService.GLOBAL_ACTION_BACK);
+            if (cfg.logTaps) log.event("nav_back_system");
+        }
         if (cfg.logTaps) log.event("back: " + why);
     }
 
     void swipeUp(Frame f, float amount) {
-        int x = Math.round(f.w * (0.30f + (float) Math.random() * 0.15f));
-        int y1 = Math.round(f.h * 0.72f), y2 = Math.round(f.h * (0.72f - amount));
-        AutoPlayerService.sleep(human.fast(250 + (long) (Math.random() * 250), 120));
-        svc.swipe(x, y1, x + (int) (Math.random() * 24 - 12), y2, 300 + (int) (Math.random() * 200));
+        if (!cfg.collectHumanize) {
+            int x = Math.round(f.w * (0.30f + (float) Math.random() * 0.15f));
+            int y1 = Math.round(f.h * 0.72f), y2 = Math.round(f.h * (0.72f - amount));
+            AutoPlayerService.sleep(human.fast(250 + (long) (Math.random() * 250), 120));
+            svc.swipe(x, y1, x + (int) (Math.random() * 24 - 12), y2, 300 + (int) (Math.random() * 200));
+            AutoPlayerService.sleep(human.fast(700, 450));
+            return;
+        }
+        // thumb flick: varied start, length, speed and a slight arc; now and then nudge back a little
+        float len = amount * (0.8f + (float) Math.random() * 0.45f);
+        float startY = 0.62f + (float) Math.random() * 0.18f;
+        int x1 = Math.round(f.w * (0.25f + (float) Math.random() * 0.45f));
+        int x2 = x1 + Math.round(f.w * ((float) Math.random() * 0.10f - 0.05f));
+        int y1 = Math.round(f.h * startY), y2 = Math.round(f.h * Math.max(0.12f, startY - len));
+        int bend = Math.round(f.w * ((float) Math.random() * 0.08f - 0.04f));
+        int ms = (int) Math.max(180, Math.min(800, human.logNormal(380, 0.3)));
+        AutoPlayerService.sleep(human.fast(200 + human.glance(250, 60, 1200), 120));
+        svc.swipe(x1, y1, x2, y2, bend, ms);
+        if (human.chance(8)) {
+            AutoPlayerService.sleep(human.fast(300 + (long) (Math.random() * 500), 200));
+            int back = Math.round(f.h * (0.06f + (float) Math.random() * 0.08f));
+            svc.swipe(x2, y2 + Math.round(f.h * 0.15f), x2, y2 + Math.round(f.h * 0.15f) + back, 0, 220 + (int) (Math.random() * 200));
+            if (cfg.logTaps) log.event("scroll nudge back");
+        }
         AutoPlayerService.sleep(human.fast(700, 450));
     }
 
@@ -196,13 +250,14 @@ public class CollectLoop implements Runnable, BotLoop {
                 break;
             }
         ScreenText.Item c = st.find("collect rewards");
+        AutoPlayerService.sleep(human.glance(900, 250, 3500));   // looking at what was won
         boolean tapped;
         if (c != null) tapped = tapItem(c, "collect");
         else {
             int[] band = collectButton(st, f);
             if (band == null) { svc.status("Rewards: can't find COLLECT REWARDS yet"); return; }
             pause();
-            tapAt(band[0], band[1], f.w * 0.15f, band[2] * 0.25f, "collect", "blue_button");
+            tapAt(band[0], band[1], f.w * 0.30f, band[2] * 0.35f, "collect", "blue_button");
             tapped = true;
         }
         svc.status("Collecting rewards " + reward);
@@ -247,7 +302,7 @@ public class CollectLoop implements Runnable, BotLoop {
             int[] g = green.get(0);
             svc.status("Activity: tapping the green button");
             pause();
-            tapAt(g[0], g[1], f.w * 0.12f, g[2] * 0.25f, "activity", "green_button");
+            tapAt(g[0], g[1], f.w * 0.20f, g[2] * 0.35f, "activity", "green_button");
         } else {
             // coal pile / conveyor: tap the picture itself, above the "Tap to …" line
             ScreenText.Item hint = st.find("tap to");
@@ -256,7 +311,7 @@ public class CollectLoop implements Runnable, BotLoop {
             int y = (top + bottom) / 2;
             svc.status("Activity: tapping the picture");
             pause();
-            tapAt(f.w / 2, y, f.w * 0.18f, (bottom - top) * 0.18f, "activity", "picture");
+            tapAt(f.w / 2, y, f.w * 0.25f, (bottom - top) * 0.20f, "activity", "picture");
         }
         AutoPlayerService.sleep(human.fast(1500, 800));
     }
@@ -356,7 +411,7 @@ public class CollectLoop implements Runnable, BotLoop {
         String count = badge[0] < 0 ? "?" : badge[0] + "/" + badge[1];
         svc.status("Mine has " + count + " — opening the activity");
         pause();
-        tapAt(f.w / 2, y, f.w * 0.15f, f.h * 0.03f, "open_activity", count);
+        tapAt(f.w / 2, y, f.w * 0.24f, f.h * 0.035f, "open_activity", count);
         AutoPlayerService.sleep(human.fast(1200, 600));
     }
 
@@ -367,22 +422,33 @@ public class CollectLoop implements Runnable, BotLoop {
         List<ScreenText.Item[]> cards = cards(st, f.w, f.h);
         StringBuilder keys = new StringBuilder();
         for (ScreenText.Item[] c : cards) keys.append(c[1].text).append(';');
+        List<ScreenText.Item[]> fresh = new ArrayList<>();
         for (ScreenText.Item[] card : cards) {
             String key = card[1].text.replace(" ", "");
             if (visited.contains(key)) continue;
             int y = card[0] != null ? (card[0].cy() + card[1].cy()) / 2 : card[1].cy();
             if (y < f.h * 0.18f || y > f.h * 0.86f) continue;   // only cards fully on screen
+            fresh.add(card);
+        }
+        if (!fresh.isEmpty()) {
+            // usually the next one down, sometimes the one after it (the skipped one is opened next)
+            ScreenText.Item[] card = fresh.size() > 1 && human.chance(cfg.collectSkipPct) ? fresh.get(1) : fresh.get(0);
+            String key = card[1].text.replace(" ", "");
+            int y = card[0] != null ? (card[0].cy() + card[1].cy()) / 2 : card[1].cy();
             visited.add(key);
             collectedHere = false;
             lastListFrame = null;
             listStill = 0;
             current = (card[0] != null ? card[0].text + " " : "") + card[1].text;
             opened++;
-            listStill = 0;
+            if (opened > 1) maybeRest();
+            if (!running) return;
             svc.status("Opening " + current + " (" + opened + " opened, " + collected + " collected)");
             if (cfg.logTaps) log.event("open " + current);
             pause();
-            tapAt(card[1].cx(), y, Math.max(20, card[1].width() / 3f), f.h * 0.012f, "open_property", current);
+            AutoPlayerService.sleep(human.glance(450, 80, 2500));   // skimming the card
+            // anywhere on the card: it spans most of the width, title down to the "Active" line
+            tapAt(Math.round(f.w * 0.55f), y + Math.round(f.h * 0.01f), f.w * 0.28f, f.h * 0.03f, "open_property", current);
             AutoPlayerService.sleep(human.fast(1500, 700));
             return;
         }
