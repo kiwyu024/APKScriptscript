@@ -135,7 +135,8 @@ public class CollectLoop implements Runnable, BotLoop {
         if (st.has("collect rewards", "rewards earned")) return Screen.REWARDS;
         if (st.has("loading property")) return Screen.LOADING;
         if (st.has("daily activity")) return Screen.ACTIVITY;
-        if (st.has("production level", "mine entrance", "visitor greeting", "unnamed mine", "edit name")) return Screen.MINE;
+        if (st.has("production level", "mine entrance", "visitor greeting", "unnamed mine", "edit name",
+                "game level", "games played", "games won", "win rate", "resets in")) return Screen.MINE;
         boolean coords = false;
         for (ScreenText.Item it : st.items) if (COORDS.matcher(it.text).matches()) { coords = true; break; }
         if (st.has("properties") && (coords || st.has("load 20 more", "load more", "sort:"))) return Screen.LIST;
@@ -298,6 +299,13 @@ public class CollectLoop implements Runnable, BotLoop {
         actionTaps = 0;
         List<int[]> b = badges(st, Math.round(f.h * 0.10f), Math.round(f.h * 0.90f));
         if (b.isEmpty()) {
+            // text didn't give the counter (white on orange is hard to read): find the orange pill
+            // and read its first digit by shape. -1 = unreadable -> open the activity anyway, its
+            // header counter is easy to read and the activity step backs out at 0.
+            for (int[] p : Vision.findBadgePills(f, Math.round(f.h * 0.10f), Math.round(f.h * 0.90f)))
+                b.add(new int[]{Vision.pillFirstDigit(f, p), 3, p[0], p[3]});
+        }
+        if (b.isEmpty()) {
             if (mineScrolls++ < 5) {
                 svc.status("Mine: scrolling to its activity");
                 swipeUp(f, 0.30f);
@@ -331,9 +339,10 @@ public class CollectLoop implements Runnable, BotLoop {
             return;
         }
         mineScrolls = 0;
-        svc.status("Mine has " + badge[0] + "/" + badge[1] + " — opening the activity");
+        String count = badge[0] < 0 ? "?" : badge[0] + "/" + badge[1];
+        svc.status("Mine has " + count + " — opening the activity");
         pause();
-        tapAt(f.w / 2, y, f.w * 0.15f, f.h * 0.03f, "open_activity", badge[0] + "/" + badge[1]);
+        tapAt(f.w / 2, y, f.w * 0.15f, f.h * 0.03f, "open_activity", count);
         AutoPlayerService.sleep(human.fast(1200, 600));
     }
 
