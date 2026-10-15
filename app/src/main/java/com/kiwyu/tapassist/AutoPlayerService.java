@@ -29,7 +29,7 @@ public class AutoPlayerService extends AccessibilityService {
     final Handler main = new Handler(Looper.getMainLooper());
     final ExecutorService shotExec = Executors.newSingleThreadExecutor();
     Overlay overlay;
-    GameLoop loop;
+    BotLoop loop;
 
     // Foreground tracking (written from main thread, read from worker).
     volatile String fgPackage = "";
@@ -90,7 +90,7 @@ public class AutoPlayerService extends AccessibilityService {
 
     // ------------------------------------------------------------------ control
     void startLoop() {
-        if (loop != null && loop.running) return;
+        if (loop != null && loop.isRunning()) return;
         Config cfg = Config.load(this);
         AccessibilityNodeInfo root = getRootInActiveWindow();
         if (root != null && root.getPackageName() != null
@@ -98,7 +98,7 @@ public class AutoPlayerService extends AccessibilityService {
             cfg.gamePackage = root.getPackageName().toString();
             cfg.save(this);
         }
-        loop = new GameLoop(this, cfg);
+        loop = "collect".equals(cfg.mode) ? new CollectLoop(this, cfg) : new GameLoop(this, cfg);
         loop.start();
     }
 
@@ -107,7 +107,7 @@ public class AutoPlayerService extends AccessibilityService {
         Config c = Config.load(this);
         c.speed = s;
         c.save(this);
-        if (loop != null) loop.cfg.speed = s;
+        if (loop != null) loop.config().speed = s;
     }
 
     void stopLoop() {
@@ -115,7 +115,7 @@ public class AutoPlayerService extends AccessibilityService {
         loop = null;
     }
 
-    boolean isRunning() { return loop != null && loop.running; }
+    boolean isRunning() { return loop != null && loop.isRunning(); }
 
     void status(String s) {
         main.post(() -> { if (overlay != null) overlay.setStatus(s); });

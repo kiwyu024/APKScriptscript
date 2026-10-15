@@ -60,6 +60,13 @@ public class MainActivity extends Activity {
         help.setPadding(0, pad / 2, 0, pad / 2);
         col.addView(help);
 
+        title("Resource collector");
+        note("Switch the floating panel's mode (⚙ → Mode) to 'Collect resources', open Profile → Properties and " +
+                "press ▶. It opens each mine, collects its daily activity when it shows attempts left (e.g. 1/3), " +
+                "skips ones at 0/3, scrolls and taps 'Load 20 More', and finds its way back if it gets lost. " +
+                "It never taps Watch Ad, Edit, Refer, Logout or ENTER MINE.");
+        num("collectRepeatMin", "After a full pass, start again after (minutes)", cfg.collectRepeatMin);
+
         title("Speed");
         dec("speed", "Speed (1 = normal, 1.5, 2, 3 …)", cfg.speed);
         note("Speeds up every pause and tap gap. It never goes below what the game needs: 200 ms between taps on " +
@@ -157,6 +164,7 @@ public class MainActivity extends Activity {
             cfg.tapDir = d == 0 ? 1 : d == 1 ? -1 : 0;
             cfg.edgeThreshold = i("edgeThreshold");
             cfg.speed = Math.max(0.25f, Math.min(10f, Float.parseFloat(fields.get("speed").getText().toString().trim())));
+            cfg.collectRepeatMin = i("collectRepeatMin");
             cfg.tapDelayMs = i("tapDelayMs"); cfg.settleMs = i("settleMs"); cfg.loopMs = i("loopMs");
             cfg.playTexts = fields.get("playTexts").getText().toString();
             cfg.replayGapSec = i("replayGapSec");

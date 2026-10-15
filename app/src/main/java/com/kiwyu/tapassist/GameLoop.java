@@ -13,7 +13,7 @@ import java.util.List;
  *   Play Again / Watch Ad -> tap it (never Exit)
  *   puzzle showing        -> read tiles, find the road leprechaun -> pot, tap tiles
  */
-public class GameLoop implements Runnable {
+public class GameLoop implements Runnable, BotLoop {
     final AutoPlayerService svc;
     final Config cfg;
     final Humanizer human;
@@ -54,13 +54,16 @@ public class GameLoop implements Runnable {
         if (cfg.logTaps) log.add(p[0], p[1], press, d, kind, detail);
     }
 
-    void start() {
+    @Override public Config config() { return cfg; }
+    @Override public boolean isRunning() { return running; }
+
+    @Override public void start() {
         running = true;
         thread = new Thread(this, "TapLoop");
         thread.start();
     }
 
-    void stop() {
+    @Override public void stop() {
         running = false;
         if (thread != null) thread.interrupt();
     }

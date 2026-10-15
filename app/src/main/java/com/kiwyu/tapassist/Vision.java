@@ -410,4 +410,36 @@ public class Vision {
         }
         return best;
     }
+
+    // ------------------------------------------------------- coloured buttons (collector)
+    static boolean btnBlue(int p) { return Frame.b(p) > 200 && Frame.r(p) < 90 && Frame.g(p) > 100 && Frame.g(p) < 190; }
+    static boolean btnGreen(int p) { int r = Frame.r(p), g = Frame.g(p), b = Frame.b(p); return g > r + 40 && g > b + 20 && g > 100; }
+
+    /**
+     * Horizontal button bands of one colour between two heights: {centreX, centreY, height}, top to bottom.
+     * A band is a run of rows where more than a third of the row is that colour.
+     */
+    public static java.util.List<int[]> buttonBands(Frame f, int fromY, int toY, boolean blue) {
+        java.util.List<int[]> out = new java.util.ArrayList<>();
+        int start = -1, last = -1;
+        long sx = 0, n = 0;
+        for (int y = Math.max(0, fromY); y < Math.min(f.h, toY); y += 2) {
+            int hit = 0;
+            long rowX = 0;
+            for (int x = 0; x < f.w; x += 3) {
+                int p = f.px[y * f.w + x];
+                if (blue ? btnBlue(p) : btnGreen(p)) { hit++; rowX += x; }
+            }
+            boolean on = hit > (f.w / 3) * 0.35f;   // over 35% of the sampled row
+            if (on) {
+                if (start < 0 || y - last > 6) {
+                    if (start >= 0 && last - start >= f.h * 0.015f) out.add(new int[]{(int) (sx / Math.max(1, n)), (start + last) / 2, last - start});
+                    start = y; sx = 0; n = 0;
+                }
+                last = y; sx += rowX; n += hit;
+            }
+        }
+        if (start >= 0 && last - start >= f.h * 0.015f) out.add(new int[]{(int) (sx / Math.max(1, n)), (start + last) / 2, last - start});
+        return out;
+    }
 }

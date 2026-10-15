@@ -73,6 +73,18 @@ public class Overlay {
         menu = new LinearLayout(svc);
         menu.setOrientation(LinearLayout.VERTICAL);
         menu.setVisibility(View.GONE);
+        Button modeItem = menuItem(modeLabel(), v -> { });
+        modeItem.setOnClickListener(v -> {
+            menu.setVisibility(View.GONE);
+            if (svc.isRunning()) { setStatus("Stop the bot (■) before switching mode"); return; }
+            Config c = Config.load(svc);
+            c.mode = "collect".equals(c.mode) ? "puzzle" : "collect";
+            c.save(svc);
+            modeItem.setText(modeLabel());
+            setStatus("Mode: " + ("collect".equals(c.mode) ? "Collect resources" : "Gold Rush puzzle"));
+        });
+        menu.addView(modeItem);
+        menu.addView(menuItem("Read screen text", v -> readText()));
         menu.addView(menuItem("Check board now", v -> snapshot(false)));
         menu.addView(menuItem("Save debug snapshot", v -> snapshot(true)));
         menu.addView(menuItem("Add ad X position", v -> Calibrator.adClose(svc, this)));
@@ -198,6 +210,27 @@ public class Overlay {
             sb.append("X score ").append(x[0]).append(" at ").append(x[1]).append(',').append(x[2]);
             if (save) sb.append('\n').append(DebugDump.save(svc, f, b, "snapshot"));
             svc.status(sb.toString());
+        }).start();
+    }
+
+    String modeLabel() {
+        return "collect".equals(Config.load(svc).mode) ? "Mode: Collect resources ⇄" : "Mode: Gold Rush puzzle ⇄";
+    }
+
+    /** Shows what text the bot can read on screen (accessibility or OCR). */
+    void readText() {
+        setStatus("Reading screen text…");
+        new Thread(() -> {
+            AutoPlayerService.sleep(300);
+            Frame f = svc.screenshot();
+            ScreenText a = ScreenText.read(svc, f, false);
+            ScreenText o = f == null ? new ScreenText() : ScreenText.read(svc, f, true);
+            StringBuilder sb = new StringBuilder();
+            sb.append("Accessibility: ").append("accessibility".equals(a.source) ? a.items.size() : 0).append(" texts\n");
+            sb.append("OCR: ").append(o.items.size()).append(" texts\n");
+            ScreenText best = a.items.size() >= o.items.size() ? a : o;
+            for (int i = 0; i < Math.min(6, best.items.size()); i++) sb.append(best.items.get(i).text).append('\n');
+            svc.status(sb.toString().trim());
         }).start();
     }
 
