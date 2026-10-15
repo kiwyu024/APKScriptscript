@@ -518,4 +518,17 @@ public class Vision {
     static boolean isTextWhite(int p) { return Frame.r(p) > 225 && Frame.g(p) > 215 && Frame.b(p) > 200; }
     private static boolean rowHasWhite(Frame f, int x0, int x1, int y) { for (int x = x0; x <= x1; x++) if (isTextWhite(f.get(x, y))) return true; return false; }
     private static boolean colHasWhite(Frame f, int x0, int x1, int y) { for (int x = x0; x <= x1; x++) if (isTextWhite(f.get(x, y))) return true; return false; }
+
+    /** The "REWARDS EARNED!" popup: a tall bright-yellow frame down both sides of the screen. */
+    public static boolean isRewardsPopup(Frame f) {
+        int xl = Math.round(f.w * 0.055f), xr = Math.round(f.w * 0.945f), l = 0, r = 0;
+        for (int y = Math.round(f.h * 0.15f); y < Math.round(f.h * 0.92f); y += 2) {
+            if (popupYellow(f.get(xl, y))) l++;
+            if (popupYellow(f.get(xr, y))) r++;
+        }
+        int need = Math.round(f.h * 0.25f / 2);
+        return l >= need && r >= need;
+    }
+
+    static boolean popupYellow(int p) { return Frame.r(p) > 230 && Frame.g(p) > 190 && Frame.b(p) < 80; }
 }

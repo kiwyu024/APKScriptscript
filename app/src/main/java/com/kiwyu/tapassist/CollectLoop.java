@@ -33,6 +33,7 @@ public class CollectLoop implements Runnable, BotLoop {
 
     static final Pattern BADGE = Pattern.compile("^(\\d+)\\s*/\\s*(\\d+)$");
     static final Pattern COORDS = Pattern.compile("^-?\\d{1,3}\\.\\d+\\s*,\\s*-?\\d{1,3}\\.\\d+$");
+    static final Pattern RARITY = Pattern.compile("\\((common|uncommon|rare|epic|legendary|mythic)\\)");
     static final Pattern NUMBER = Pattern.compile("^\\d[\\d,]*$");
     /** Never tapped, whatever happens. */
     static final String[] BLOCKED = {"watch", "logout", "log out", "delete", "edit", "refer", "enter mine",
@@ -132,7 +133,8 @@ public class CollectLoop implements Runnable, BotLoop {
     enum Screen { REWARDS, LOADING, ACTIVITY, MINE, LIST, PROFILE, DIALOG, UNKNOWN }
 
     static Screen classify(ScreenText st) {
-        if (st.has("collect rewards", "rewards earned")) return Screen.REWARDS;
+        if (st.has("collect rewards", "rewards earned", "tb bonus")) return Screen.REWARDS;
+        for (ScreenText.Item it : st.items) if (RARITY.matcher(it.lower).find()) return Screen.REWARDS;
         if (st.has("loading property")) return Screen.LOADING;
         if (st.has("daily activity")) return Screen.ACTIVITY;
         if (st.has("production level", "mine entrance", "visitor greeting", "unnamed mine", "edit name",
@@ -154,6 +156,9 @@ public class CollectLoop implements Runnable, BotLoop {
             ScreenText o = ScreenText.read(svc, f, true);
             if (classify(o) != Screen.UNKNOWN) { st = o; s = classify(o); }
         }
+        // the rewards popup sits over the activity screen (whose header already says 0/3):
+        // never treat it as "activity done" and back out without collecting
+        if (s != Screen.REWARDS && Vision.isRewardsPopup(f)) s = Screen.REWARDS;
         if (s != Screen.UNKNOWN) unknownTicks = 0;
         if (s != Screen.LOADING) loadingTicks = 0;
 
