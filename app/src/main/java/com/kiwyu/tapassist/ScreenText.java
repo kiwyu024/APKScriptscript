@@ -63,6 +63,9 @@ public class ScreenText {
         List<AccessibilityWindowInfo> wins;
         try { wins = svc.getWindows(); } catch (Exception e) { return; }
         for (AccessibilityWindowInfo w : wins) {
+            // only app windows: skips the status bar clock, the nav bar's Back/Home/Recents,
+            // Game Booster and our own panel
+            if (w.getType() != AccessibilityWindowInfo.TYPE_APPLICATION) continue;
             AccessibilityNodeInfo root = w.getRoot();
             if (root == null) continue;
             CharSequence pkg = root.getPackageName();
