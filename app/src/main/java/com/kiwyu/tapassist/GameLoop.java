@@ -26,6 +26,8 @@ public class GameLoop implements Runnable {
     long adStart = 0, adEndedAt = 0, lastAdTap = 0;
     int discTaps = 0;           // arrow-button taps for the current ad
     int adFallbackTries = 0;
+    int xTaps = 0;              // X taps on the current ad that didn't close it
+    long firstXTap = 0;
     long unknownSince = 0;
     Rect lastBoardRect;        // where the board was last seen (to keep the panel out of screenshots)
 
@@ -119,7 +121,7 @@ public class GameLoop implements Runnable {
             handleAd(f, now, adFg);
             return;
         }
-        if (adStart > 0) { adStart = 0; discTaps = 0; adEndedAt = now; adFallbackTries = 0; }
+        if (adStart > 0) { adStart = 0; discTaps = 0; adEndedAt = now; adFallbackTries = 0; xTaps = 0; firstXTap = 0; }
 
         if (replay != null) {
             unknownSince = 0;
@@ -217,7 +219,7 @@ public class GameLoop implements Runnable {
     }
 
     void endFalseAd() {
-        adStart = 0; discTaps = 0;
+        adStart = 0; discTaps = 0; xTaps = 0; firstXTap = 0;
         expectAdUntil = 0;
         adFallbackTries = 0;
     }
@@ -331,8 +333,21 @@ public class GameLoop implements Runnable {
             }
         }
         if (x[0] >= cfg.xThreshold) {
+            // Some test ads show an X that doesn't respond (not even by hand). After 3 taps that didn't
+            // close it, press the phone's Back; if the ad is still there, try the X again, then Back again.
+            if (xTaps >= 3 && now - firstXTap >= 4000) {
+                svc.status("Ad: the X isn't closing it — pressing Back (" + secs + "s)");
+                if (cfg.logTaps) log.event("ad: X tapped " + xTaps + " times without closing, pressing Back");
+                AutoPlayerService.sleep(human.fast(human.reactionPause() + 300, 200));
+                svc.performGlobalAction(AccessibilityService.GLOBAL_ACTION_BACK);
+                xTaps = 0;
+                firstXTap = 0;
+                lastAdTap = System.currentTimeMillis() + 1000;   // give it ~2.5 s to go away
+                return;
+            }
             svc.status("Ad: closing X at " + x[1] + "," + x[2] + " (" + secs + "s)");
             tap(x[1], x[2], 4, 4, "ad_close", "x_detected");
+            if (xTaps++ == 0) firstXTap = now;
             lastAdTap = System.currentTimeMillis();
             return;
         }
