@@ -20,16 +20,6 @@ public class Config {
 
     /** Speed multiplier for all timing (1 = normal, 2 = twice as fast); the game's animation limits still apply. */
     public float speed = 1.0f;
-    /** "puzzle" = Gold Rush bot, "collect" = resource collector. */
-    public String mode = "puzzle";
-    public int collectRepeatMin = 60;   // collector: wait this long after a full pass, then go again
-    // Collector humanizing (its own switch, on by default; independent of the puzzle's Humanize taps)
-    public boolean collectHumanize = true;
-    public boolean collectBreaks = true;
-    public int collectBreakEveryMin = 20, collectBreakEveryMax = 60;   // properties opened between breaks
-    public int collectBreakMinSec = 30, collectBreakMaxSec = 180;
-    public int collectSysBackPct = 20;   // % of "go back" done with the phone's Back instead of the ← Back button
-    public int collectSkipPct = 20;      // % of times it opens the 2nd unopened card on screen first
     public int tapDelayMs = 300;     // between taps (each rotation animates)
     public int settleMs = 800;       // after the last tap before re-checking
     public int loopMs = 700;
@@ -81,16 +71,6 @@ public class Config {
         k.edgeThreshold = p.getInt("edgeThreshold", k.edgeThreshold);
         k.xThreshold = p.getInt("xThreshold", k.xThreshold);
         k.speed = p.getFloat("speed", k.speed);
-        k.mode = p.getString("mode", k.mode);
-        k.collectRepeatMin = p.getInt("collectRepeatMin", k.collectRepeatMin);
-        k.collectHumanize = p.getBoolean("collectHumanize", k.collectHumanize);
-        k.collectBreaks = p.getBoolean("collectBreaks", k.collectBreaks);
-        k.collectBreakEveryMin = p.getInt("collectBreakEveryMin", k.collectBreakEveryMin);
-        k.collectBreakEveryMax = p.getInt("collectBreakEveryMax", k.collectBreakEveryMax);
-        k.collectBreakMinSec = p.getInt("collectBreakMinSec", k.collectBreakMinSec);
-        k.collectBreakMaxSec = p.getInt("collectBreakMaxSec", k.collectBreakMaxSec);
-        k.collectSysBackPct = p.getInt("collectSysBackPct", k.collectSysBackPct);
-        k.collectSkipPct = p.getInt("collectSkipPct", k.collectSkipPct);
         k.tapDelayMs = p.getInt("tapDelayMs", k.tapDelayMs);
         k.settleMs = p.getInt("settleMs", k.settleMs);
         k.loopMs = p.getInt("loopMs", k.loopMs);
@@ -130,11 +110,7 @@ public class Config {
                 .putInt("tlX", tlX).putInt("tlY", tlY).putInt("brX", brX).putInt("brY", brY)
                 .putInt("tapDir", tapDir)
                 .putInt("edgeThreshold", edgeThreshold).putInt("xThreshold", xThreshold)
-                .putFloat("speed", speed).putString("mode", mode).putInt("collectRepeatMin", collectRepeatMin)
-                .putBoolean("collectHumanize", collectHumanize).putBoolean("collectBreaks", collectBreaks)
-                .putInt("collectBreakEveryMin", collectBreakEveryMin).putInt("collectBreakEveryMax", collectBreakEveryMax)
-                .putInt("collectBreakMinSec", collectBreakMinSec).putInt("collectBreakMaxSec", collectBreakMaxSec)
-                .putInt("collectSysBackPct", collectSysBackPct).putInt("collectSkipPct", collectSkipPct).putInt("tapDelayMs", tapDelayMs).putInt("settleMs", settleMs).putInt("loopMs", loopMs)
+                .putFloat("speed", speed).putInt("tapDelayMs", tapDelayMs).putInt("settleMs", settleMs).putInt("loopMs", loopMs)
                 .putString("playTexts", playTexts).putInt("replayGapSec", replayGapSec)
                 .putInt("adTimeoutSec", adTimeoutSec)
                 .putString("adClosePoints", adClosePoints)

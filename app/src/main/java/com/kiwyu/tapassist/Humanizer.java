@@ -36,10 +36,7 @@ public class Humanizer {
         newSession();
     }
 
-    /** Overrides cfg.humanize when set (the collector has its own switch). */
-    public Boolean force = null;
-
-    boolean on() { return force != null ? force : cfg.humanize; }
+    boolean on() { return cfg.humanize; }
 
     void newSession() {
         speed = logNormal(1.0, 0.15);
@@ -78,29 +75,6 @@ public class Humanizer {
         fy = clamp(fy, -max, max);
         return new int[]{Math.round(cx + fx * hw), Math.round(cy + fy * hh)};
     }
-
-    /**
-     * A tap point anywhere on a button/card of half-size (hw, hh): centred on this session's habitual
-     * spot, loose, but kept inside the inner 75% so it never lands off the element.
-     */
-    public int[] pointWide(int cx, int cy, float hw, float hh) {
-        if (!on()) return new int[]{cx, cy};
-        float sd = 0.30f * spread;
-        float fx = biasX * 2 + (float) rnd.nextGaussian() * sd;
-        float fy = biasY * 2 + (float) rnd.nextGaussian() * sd;
-        if (rnd.nextInt(100) < 15) fx = (rnd.nextFloat() * 2 - 1) * 0.7f;   // sometimes just anywhere along it
-        fx = clamp(fx, -0.75f, 0.75f);
-        fy = clamp(fy, -0.75f, 0.75f);
-        return new int[]{Math.round(cx + fx * hw), Math.round(cy + fy * hh)};
-    }
-
-    /** Pause, ms: log-normal around {@code medianMs} (scaled by tempo and speed); 0 when humanize is off. */
-    public long glance(double medianMs, long lo, long hi) {
-        if (!on()) return 0;
-        return scaled(logNormal(medianMs * tempo(), 0.4, lo, hi));
-    }
-
-    public boolean chance(int pct) { return on() && rnd.nextInt(100) < pct; }
 
     /** How long the finger stays down, ms. */
     public int pressMs() {

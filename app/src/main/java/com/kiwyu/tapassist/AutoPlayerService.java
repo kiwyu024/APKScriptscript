@@ -29,7 +29,7 @@ public class AutoPlayerService extends AccessibilityService {
     final Handler main = new Handler(Looper.getMainLooper());
     final ExecutorService shotExec = Executors.newSingleThreadExecutor();
     Overlay overlay;
-    BotLoop loop;
+    GameLoop loop;
 
     // Foreground tracking (written from main thread, read from worker).
     volatile String fgPackage = "";
@@ -90,7 +90,7 @@ public class AutoPlayerService extends AccessibilityService {
 
     // ------------------------------------------------------------------ control
     void startLoop() {
-        if (loop != null && loop.isRunning()) return;
+        if (loop != null && loop.running) return;
         Config cfg = Config.load(this);
         AccessibilityNodeInfo root = getRootInActiveWindow();
         if (root != null && root.getPackageName() != null
@@ -98,7 +98,7 @@ public class AutoPlayerService extends AccessibilityService {
             cfg.gamePackage = root.getPackageName().toString();
             cfg.save(this);
         }
-        loop = "collect".equals(cfg.mode) ? new CollectLoop(this, cfg) : new GameLoop(this, cfg);
+        loop = new GameLoop(this, cfg);
         loop.start();
     }
 
@@ -107,7 +107,7 @@ public class AutoPlayerService extends AccessibilityService {
         Config c = Config.load(this);
         c.speed = s;
         c.save(this);
-        if (loop != null) loop.config().speed = s;
+        if (loop != null) loop.cfg.speed = s;
     }
 
     void stopLoop() {
@@ -115,7 +115,7 @@ public class AutoPlayerService extends AccessibilityService {
         loop = null;
     }
 
-    boolean isRunning() { return loop != null && loop.isRunning(); }
+    boolean isRunning() { return loop != null && loop.running; }
 
     void status(String s) {
         main.post(() -> { if (overlay != null) overlay.setStatus(s); });
@@ -171,14 +171,10 @@ public class AutoPlayerService extends AccessibilityService {
 
     // -------------------------------------------------------------------- taps
     /** Blocking swipe (call from a worker thread), e.g. to scroll a page. */
-    boolean swipe(int x1, int y1, int x2, int y2, int ms) { return swipe(x1, y1, x2, y2, 0, ms); }
-
-    /** Swipe along a gentle arc: {@code bend} px sideways at the middle (a thumb doesn't move in a straight line). */
-    boolean swipe(int x1, int y1, int x2, int y2, int bend, int ms) {
+    boolean swipe(int x1, int y1, int x2, int y2, int ms) {
         Path path = new Path();
         path.moveTo(x1, y1);
-        if (bend == 0) path.lineTo(x2, y2);
-        else path.quadTo((x1 + x2) / 2f + bend, (y1 + y2) / 2f, x2, y2);
+        path.lineTo(x2, y2);
         GestureDescription g = new GestureDescription.Builder()
                 .addStroke(new GestureDescription.StrokeDescription(path, 0, Math.max(50, ms))).build();
         CountDownLatch latch = new CountDownLatch(1);
@@ -266,32 +262,5 @@ public class AutoPlayerService extends AccessibilityService {
 
     static void sleep(long ms) {
         try { Thread.sleep(ms); } catch (InterruptedException ignored) { Thread.currentThread().interrupt(); }
-    }
-
-    /** Accessibility "scroll forward" on the biggest scrollable view in the game (fallback when swipes don't move it). */
-    boolean scrollForward() {
-        List<AccessibilityWindowInfo> wins;
-        try { wins = getWindows(); } catch (Exception e) { return false; }
-        AccessibilityNodeInfo best = null;
-        long bestArea = 0;
-        for (AccessibilityWindowInfo w : wins) {
-            if (w.getType() != AccessibilityWindowInfo.TYPE_APPLICATION) continue;
-            AccessibilityNodeInfo root = w.getRoot();
-            if (root == null || (root.getPackageName() != null && root.getPackageName().toString().equals(getPackageName()))) continue;
-            java.util.ArrayDeque<AccessibilityNodeInfo> q = new java.util.ArrayDeque<>();
-            q.add(root);
-            int seen = 0;
-            while (!q.isEmpty() && seen++ < 3000) {
-                AccessibilityNodeInfo n = q.poll();
-                if (n.isScrollable()) {
-                    android.graphics.Rect r = new android.graphics.Rect();
-                    n.getBoundsInScreen(r);
-                    long area = (long) r.width() * r.height();
-                    if (area > bestArea) { bestArea = area; best = n; }
-                }
-                for (int i = 0; i < n.getChildCount(); i++) { AccessibilityNodeInfo c = n.getChild(i); if (c != null) q.add(c); }
-            }
-        }
-        return best != null && best.performAction(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD);
     }
 }

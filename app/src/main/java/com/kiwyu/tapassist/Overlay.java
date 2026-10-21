@@ -73,18 +73,6 @@ public class Overlay {
         menu = new LinearLayout(svc);
         menu.setOrientation(LinearLayout.VERTICAL);
         menu.setVisibility(View.GONE);
-        Button modeItem = menuItem(modeLabel(), v -> { });
-        modeItem.setOnClickListener(v -> {
-            menu.setVisibility(View.GONE);
-            if (svc.isRunning()) { setStatus("Stop the bot (■) before switching mode"); return; }
-            Config c = Config.load(svc);
-            c.mode = "collect".equals(c.mode) ? "puzzle" : "collect";
-            c.save(svc);
-            modeItem.setText(modeLabel());
-            setStatus("Mode: " + ("collect".equals(c.mode) ? "Collect resources" : "Gold Rush puzzle"));
-        });
-        menu.addView(modeItem);
-        menu.addView(menuItem("Read screen text", v -> readText()));
         menu.addView(menuItem("Check board now", v -> snapshot(false)));
         menu.addView(menuItem("Save debug snapshot", v -> snapshot(true)));
         menu.addView(menuItem("Add ad X position", v -> Calibrator.adClose(svc, this)));
@@ -109,7 +97,6 @@ public class Overlay {
         android.content.SharedPreferences p = svc.getSharedPreferences(Config.PREFS, 0);
         lp.x = p.getInt("panelX", dp(4));
         lp.y = p.getInt("panelY", dp(60));
-        clamp();   // a position saved off-screen comes back into view
 
         // Drag by grabbing anywhere on the panel background or buttons.
         View.OnTouchListener drag = new View.OnTouchListener() {
@@ -124,7 +111,6 @@ public class Overlay {
                         if (!moved && Math.hypot(dx, dy) < dp(8)) return false;
                         moved = true;
                         lp.x = ox - Math.round(dx); lp.y = oy - Math.round(dy);   // measured from bottom-right
-                        clamp();
                         wm.updateViewLayout(root, lp);
                         return true;
                     case MotionEvent.ACTION_UP:
@@ -213,27 +199,6 @@ public class Overlay {
         }).start();
     }
 
-    String modeLabel() {
-        return "collect".equals(Config.load(svc).mode) ? "Mode: Collect resources ⇄" : "Mode: Gold Rush puzzle ⇄";
-    }
-
-    /** Shows what text the bot can read on screen (accessibility or OCR). */
-    void readText() {
-        setStatus("Reading screen text…");
-        new Thread(() -> {
-            AutoPlayerService.sleep(300);
-            Frame f = svc.screenshot();
-            ScreenText a = ScreenText.read(svc, f, false);
-            ScreenText o = f == null ? new ScreenText() : ScreenText.read(svc, f, true);
-            StringBuilder sb = new StringBuilder();
-            sb.append("Accessibility: ").append("accessibility".equals(a.source) ? a.items.size() : 0).append(" texts\n");
-            sb.append("OCR: ").append(o.items.size()).append(" texts\n");
-            ScreenText best = a.items.size() >= o.items.size() ? a : o;
-            for (int i = 0; i < Math.min(6, best.items.size()); i++) sb.append(best.items.get(i).text).append('\n');
-            svc.status(sb.toString().trim());
-        }).start();
-    }
-
     void setStatus(String s) { if (status != null) status.setText(s); }
 
     /** Panel bounds on screen (main thread), or null when not shown. */
@@ -252,25 +217,6 @@ public class Overlay {
         if (root == null) return;
         if (on) lp.flags |= WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE;
         else lp.flags &= ~WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE;
-        try { wm.updateViewLayout(root, lp); } catch (Exception ignored) { }
-    }
-
-    /** Keeps the panel on screen (so it can always be grabbed again). */
-    void clamp() {
-        android.util.DisplayMetrics dm = svc.getResources().getDisplayMetrics();
-        int w = root != null && root.getWidth() > 0 ? root.getWidth() : dp(110);
-        int h = root != null && root.getHeight() > 0 ? root.getHeight() : dp(70);
-        lp.x = Math.max(0, Math.min(lp.x, dm.widthPixels - w));
-        lp.y = Math.max(0, Math.min(lp.y, dm.heightPixels - h));
-    }
-
-    /** Puts the panel back in its default spot (bottom-right, over the game's Settings tab). */
-    void resetPosition() {
-        if (root == null) return;
-        lp.x = dp(4);
-        lp.y = dp(60);
-        svc.getSharedPreferences(Config.PREFS, 0).edit().putInt("panelX", lp.x).putInt("panelY", lp.y).apply();
-        root.setVisibility(View.VISIBLE);
         try { wm.updateViewLayout(root, lp); } catch (Exception ignored) { }
     }
 

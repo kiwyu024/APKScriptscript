@@ -13,7 +13,7 @@ import java.util.List;
  *   Play Again / Watch Ad -> tap it (never Exit)
  *   puzzle showing        -> read tiles, find the road leprechaun -> pot, tap tiles
  */
-public class GameLoop implements Runnable, BotLoop {
+public class GameLoop implements Runnable {
     final AutoPlayerService svc;
     final Config cfg;
     final Humanizer human;
@@ -35,8 +35,6 @@ public class GameLoop implements Runnable, BotLoop {
     int attempts = 0;
     int solvedCount = 0;
     boolean dumped = false;
-    long notReadySince = 0, lastStuckLog = 0;   // watchdog: a "board" that never shows leprechaun + pot
-    boolean stuckDumped = false;
 
     static final String[] CLOSE_LABELS = {"close", "close ad", "close advertisement", "skip", "skip ad",
             "skip video", "×", "✕", "✖", "dismiss"};
@@ -56,16 +54,13 @@ public class GameLoop implements Runnable, BotLoop {
         if (cfg.logTaps) log.add(p[0], p[1], press, d, kind, detail);
     }
 
-    @Override public Config config() { return cfg; }
-    @Override public boolean isRunning() { return running; }
-
-    @Override public void start() {
+    void start() {
         running = true;
         thread = new Thread(this, "TapLoop");
         thread.start();
     }
 
-    @Override public void stop() {
+    void stop() {
         running = false;
         if (thread != null) thread.interrupt();
     }
@@ -112,38 +107,6 @@ public class GameLoop implements Runnable, BotLoop {
             }
             lastBoardRect = new Rect(board.left, board.top, board.left + board.size, board.top + board.size);
         }
-        // Things with a yellow frame that are not the puzzle: the "REWARDS EARNED!" popup and the Gold
-        // Mine page. Measured on all screenshots so far: these checks never fire on a real puzzle board.
-        if (board != null && (Vision.isRewardsPopup(f) || Vision.isMineScreen(f))) board = null;
-        if (Vision.isRewardsPopup(f)) {
-            int[] c = CollectLoop.collectButton(ScreenText.read(svc, f, false), f);
-            if (c != null) {
-                svc.status("Rewards popup — tapping COLLECT REWARDS");
-                if (cfg.logTaps) log.event("rewards popup: collect");
-                AutoPlayerService.sleep(human.fast(human.reactionPause() + 500, 300));
-                tap(c[0], c[1], f.w * 0.20f, c[2] * 0.3f, "nav", "collect_rewards");
-                AutoPlayerService.sleep(human.fast(1500, 700));
-                return;
-            }
-        }
-        // Watchdog: a board that stays without leprechaun + pot isn't a puzzle; stop trusting it.
-        if (board != null) {
-            Vision.read(f, board, cfg);
-            if (board.ready() || solvedWaiting) { notReadySince = 0; stuckDumped = false; }
-            else {
-                if (notReadySince == 0) notReadySince = now;
-                long stuck = now - notReadySince;
-                if (stuck > 10000) {
-                    if (cfg.logTaps && now - lastStuckLog > 30000) {
-                        log.event("board without leprechaun+pot for " + stuck / 1000 + " s (" + board.rows + "x" + board.cols
-                                + " at " + board.left + "," + board.top + ") — treating as not a puzzle");
-                        lastStuckLog = now;
-                    }
-                    if (!stuckDumped) { DebugDump.save(svc, f, board, "stuck not ready"); stuckDumped = true; }
-                    board = null;
-                }
-            }
-        } else notReadySince = 0;
         boolean adFg = svc.adInForeground();
 
         // Thrown back to the Gold Mine screen: dismiss its dialog, scroll down and tap ENTER MINE.

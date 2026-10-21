@@ -18,7 +18,7 @@ All measurements are proportional to the screen and board size.
 
 ## Install
 
-1. Copy `dist/TapAssist-0.8.3.5.apk` to the phone and install it (allow installs from that app when asked).
+1. Copy `dist/TapAssist-0.8.3.4.apk` to the phone and install it (allow installs from that app when asked).
 2. Open **Tap Assist** → **App info** → ⋮ → **Allow restricted settings**. Android 13+ requires this before a
    sideloaded app can use accessibility.
 3. **Accessibility settings** → Installed apps → **Tap Assist** → On.
@@ -27,37 +27,6 @@ All measurements are proportional to the screen and board size.
 ⚙ → **Check board now** shows what the bot reads: the tile grid (`LEP`/`POT`/openings), the tap count
 for the road, the replay button position and the X detector score. **Save debug snapshot**, or the
 "Save debug images" setting, writes raw and annotated screenshots to `Pictures/TapAssist`.
-
-## Resource collector (Mode: Collect resources)
-
-A second script that walks your Properties list and collects resources from every
-mine that still has an attempt left.
-
-1. Open the floating panel menu (⚙) while stopped → tap **Mode** until it says
-   **Collect resources**.
-2. In the game go to **Profile → Properties** and press ▶.
-
-What it does:
-- Taps each property card once per pass (remembered by its coordinates).
-- On the mine screen it reads the badge: **1/3 → enters**, **0/3 → Back** and tries the next one.
-- In the activity it taps the action button (PAN FOR GOLD / PULL LEVER / etc., or the
-  green button / the picture when no text is readable), waits while it is busy, and taps
-  **COLLECT REWARDS** (never Watch Ad) on the rewards screen.
-- Scrolls the list, taps **Load 20 more** when it reaches the bottom, and when nothing
-  new is left it waits *Collect: minutes between passes* (main screen) and starts again
-  from the top.
-- If it lands on a screen it doesn't recognise it presses Back / taps Profile to get back
-  to the Properties list.
-
-Humanized collecting (main screen → "Humanize the collector", on by default): taps land anywhere on
-the button/card around a per-session habitual spot, press length and pauses vary, it looks at each
-reward before collecting, swipes are curved flicks of varied length/speed (sometimes nudged back),
-it sometimes opens the 2nd unopened card first and sometimes uses the phone's Back, has rare short
-distractions and takes a 30 s–3 min break every 20–60 properties (all adjustable).
-
-Screens are recognised from the game's accessibility text; if the game doesn't expose
-any, it falls back to on-device OCR (ML Kit). ⚙ → **Read screen text** shows which one is
-working on your phone.
 
 ## Ads with an arrow before the X
 

@@ -6,11 +6,9 @@ android {
     defaultConfig {
         applicationId 'com.kiwyu.tapassist'
         minSdk 30          // AccessibilityService.takeScreenshot needs API 30
-        // phones (arm64) and the Android Studio emulator (x86_64); keeps the text-recognition engine to two copies
-        ndk { abiFilters 'arm64-v8a', 'x86_64' }
         targetSdk 35
-        versionCode 28
-        versionName '0.8.3.12'
+        versionCode 19
+        versionName '0.8.3.4'
     }
     buildTypes {
         release {
@@ -23,9 +21,4 @@ android {
         sourceCompatibility JavaVersion.VERSION_17
         targetCompatibility JavaVersion.VERSION_17
     }
-}
-
-dependencies {
-    // on-device text recognition (bundled model, works offline) for the resource collector
-    implementation 'com.google.mlkit:text-recognition:16.0.1'
 }
