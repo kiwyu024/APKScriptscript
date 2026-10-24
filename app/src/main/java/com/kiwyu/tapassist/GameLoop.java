@@ -347,12 +347,12 @@ public class GameLoop implements Runnable {
             }
         }
         if (x[0] < cfg.xThreshold && continueTaps < 3 && secs >= 2) {
-            // some ads show a grey "Continue ▷|" button at the bottom instead of (or before) the X
+            // some ads show a grey "Continue ▷|" button where the X usually is, instead of (or before) it
             int[] c = null;
             for (AccessibilityNodeInfo n : svc.findNodes(new String[]{"continue"}, true)) {
                 Rect b = new Rect();
                 n.getBoundsInScreen(b);
-                if (!b.isEmpty() && b.centerY() > f.h * 0.3f) { c = new int[]{b.centerX(), b.centerY(), Math.max(4, b.width() / 4), Math.max(4, b.height() / 4)}; break; }
+                if (!b.isEmpty()) { c = new int[]{b.centerX(), b.centerY(), Math.max(4, b.width() / 4), Math.max(4, b.height() / 4)}; break; }
             }
             if (c == null) {
                 int[] v = Vision.findContinuePill(f);

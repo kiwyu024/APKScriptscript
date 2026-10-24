@@ -417,12 +417,12 @@ public class Vision {
     }
 
     /**
-     * The light grey "Continue ▷|" pill some ads show at the bottom: a grey rounded bar with dark text and
+     * The light grey "Continue ▷|" pill some ads show (in the corners where the X usually is): a grey rounded bar with dark text and
      * a white circle (the skip icon) at its right end. Returns {score, x, y} of the white circle; score 0 if none.
      */
     public static int[] findContinuePill(Frame f) {
         int[] none = {0, 0, 0};
-        int y0 = Math.round(f.h * 0.30f), y1 = Math.round(f.h * 0.985f);
+        int y0 = Math.round(f.h * 0.01f), y1 = Math.round(f.h * 0.985f);   // anywhere: it shows where the X usually is
         int minRun = Math.round(f.w * 0.12f), gap = Math.round(f.h * 0.035f);
         int bandStart = -1, bandEnd = -1, bandL = f.w, bandR = 0, rows = 0;
         java.util.List<int[]> bands = new java.util.ArrayList<>();
