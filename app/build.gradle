@@ -7,8 +7,8 @@ android {
         applicationId 'com.kiwyu.tapassist'
         minSdk 30          // AccessibilityService.takeScreenshot needs API 30
         targetSdk 35
-        versionCode 31
-        versionName '0.8.3.4.3'
+        versionCode 32
+        versionName '0.8.3.4.4'
     }
     buildTypes {
         release {
