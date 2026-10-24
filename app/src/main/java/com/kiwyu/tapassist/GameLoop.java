@@ -27,6 +27,8 @@ public class GameLoop implements Runnable {
     int discTaps = 0;           // arrow-button taps for the current ad
     int adFallbackTries = 0;
     int xTaps = 0;              // X taps on the current ad that didn't close it
+    int continueTaps = 0;       // taps on the ad's "Continue ▷|" button
+    long adFirstSeen = 0, lastForcedBack = 0;   // hard limit: Back after 100 s in an ad, whatever else happens
     long firstXTap = 0;
     long unknownSince = 0;
     Rect lastBoardRect;        // where the board was last seen (to keep the panel out of screenshots)
@@ -122,6 +124,7 @@ public class GameLoop implements Runnable {
             return;
         }
         if (adStart > 0) { adStart = 0; discTaps = 0; adEndedAt = now; adFallbackTries = 0; xTaps = 0; firstXTap = 0; }
+        adFirstSeen = 0; continueTaps = 0;
 
         if (replay != null) {
             unknownSince = 0;
@@ -220,6 +223,7 @@ public class GameLoop implements Runnable {
 
     void endFalseAd() {
         adStart = 0; discTaps = 0; xTaps = 0; firstXTap = 0;
+        adFirstSeen = 0; continueTaps = 0;
         expectAdUntil = 0;
         adFallbackTries = 0;
     }
@@ -317,6 +321,16 @@ public class GameLoop implements Runnable {
             return;
         }
         long secs = (now - adStart) / 1000;
+        // Hard limit: whatever else is going on, 100 s into an ad press Back (again every 20 s while it stays).
+        if (adFirstSeen == 0) adFirstSeen = now;
+        if (now - adFirstSeen >= 100000 && now - lastForcedBack >= 20000) {
+            svc.status("Ad: still there after " + (now - adFirstSeen) / 1000 + "s — pressing Back");
+            if (cfg.logTaps) log.event("ad: " + (now - adFirstSeen) / 1000 + " s without finishing, forced Back");
+            svc.performGlobalAction(AccessibilityService.GLOBAL_ACTION_BACK);
+            lastForcedBack = now;
+            lastAdTap = System.currentTimeMillis();
+            return;
+        }
         if (now - lastAdTap < 1500) return;
 
         int[] x = Vision.findCloseX(f);
@@ -328,6 +342,27 @@ public class GameLoop implements Runnable {
                 if (cfg.logTaps) log.event("ad: no X yet, tapping the round arrow button");
                 tap(d[1], d[2], 4, 4, "ad_next", "arrow");
                 discTaps++;
+                lastAdTap = System.currentTimeMillis();
+                return;
+            }
+        }
+        if (x[0] < cfg.xThreshold && continueTaps < 3 && secs >= 2) {
+            // some ads show a grey "Continue ▷|" button at the bottom instead of (or before) the X
+            int[] c = null;
+            for (AccessibilityNodeInfo n : svc.findNodes(new String[]{"continue"}, true)) {
+                Rect b = new Rect();
+                n.getBoundsInScreen(b);
+                if (!b.isEmpty() && b.centerY() > f.h * 0.3f) { c = new int[]{b.centerX(), b.centerY(), Math.max(4, b.width() / 4), Math.max(4, b.height() / 4)}; break; }
+            }
+            if (c == null) {
+                int[] v = Vision.findContinuePill(f);
+                if (v[0] > 0) c = new int[]{v[1], v[2], 4, 4};
+            }
+            if (c != null) {
+                svc.status("Ad: tapping Continue at " + c[0] + "," + c[1] + " (" + secs + "s)");
+                if (cfg.logTaps) log.event("ad: no X, tapping the Continue button");
+                tap(c[0], c[1], c[2], c[3], "ad_next", "continue");
+                continueTaps++;
                 lastAdTap = System.currentTimeMillis();
                 return;
             }

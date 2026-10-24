@@ -410,4 +410,66 @@ public class Vision {
         }
         return best;
     }
+
+    static boolean pillGrey(int p) {
+        int r = Frame.r(p), g = Frame.g(p), b = Frame.b(p);
+        return r >= 190 && r <= 232 && g >= 190 && g <= 232 && b >= r && b - r <= 22 && Math.abs(r - g) <= 8;
+    }
+
+    /**
+     * The light grey "Continue ▷|" pill some ads show at the bottom: a grey rounded bar with dark text and
+     * a white circle (the skip icon) at its right end. Returns {score, x, y} of the white circle; score 0 if none.
+     */
+    public static int[] findContinuePill(Frame f) {
+        int[] none = {0, 0, 0};
+        int y0 = Math.round(f.h * 0.30f), y1 = Math.round(f.h * 0.985f);
+        int minRun = Math.round(f.w * 0.12f), gap = Math.round(f.h * 0.035f);
+        int bandStart = -1, bandEnd = -1, bandL = f.w, bandR = 0, rows = 0;
+        java.util.List<int[]> bands = new java.util.ArrayList<>();
+        for (int y = y0; y < y1; y += 2) {
+            int run = 0, bestRun = 0, bestEnd = -1;
+            for (int x = 0; x < f.w; x++) {
+                if (pillGrey(f.px[y * f.w + x])) { run++; if (run > bestRun) { bestRun = run; bestEnd = x; } }
+                else run = 0;
+            }
+            if (bestRun >= minRun && bestRun < f.w * 0.97f) {
+                int l = bestEnd - bestRun + 1;
+                if (bandStart < 0 || y - bandEnd > gap) {   // the text rows split the grey: bridge them
+                    if (bandStart >= 0) bands.add(new int[]{bandStart, bandEnd, bandL, bandR, rows});
+                    bandStart = y; bandL = l; bandR = bestEnd; rows = 0;
+                }
+                bandEnd = y; rows++;
+                bandL = Math.min(bandL, l); bandR = Math.max(bandR, bestEnd);
+            }
+        }
+        if (bandStart >= 0) bands.add(new int[]{bandStart, bandEnd, bandL, bandR, rows});
+        for (int[] b : bands) {
+            int top = b[0], bot = b[1], hgt = bot - top;
+            if (hgt < f.h * 0.018f || hgt > f.h * 0.10f) continue;
+            int cy = (top + bot) / 2;
+            // the white circle: a run of near-white pixels on the middle row, just right of the grey
+            int wl = -1, wr = -1;
+            for (int x = Math.max(0, b[3] - hgt * 2); x < Math.min(f.w, b[3] + hgt * 2); x++) {
+                int p = f.get(x, cy);
+                boolean white = Frame.r(p) > 238 && Frame.g(p) > 238 && Frame.b(p) > 238;
+                // the icon inside interrupts the white: allow gaps up to half the pill's height
+                if (white) { if (wl < 0) wl = x; wr = x; }
+                else if (wl >= 0 && x - wr > hgt / 2) break;
+            }
+            if (wl < 0 || wr - wl < hgt * 0.45f || wr - wl > hgt * 1.3f) continue;
+            // a dark symbol inside the circle and dark text on the grey to its left
+            int cx = (wl + wr) / 2, dk = 0, txt = 0;
+            for (int dy = -hgt / 4; dy <= hgt / 4; dy += 2)
+                for (int dx = -hgt / 4; dx <= hgt / 4; dx += 2) {
+                    int p = f.get(cx + dx, cy + dy);
+                    if (Frame.r(p) < 90 && Frame.g(p) < 90 && Frame.b(p) < 90) dk++;
+                }
+            for (int x = b[2]; x < wl; x += 2) {
+                int p = f.get(x, cy);
+                if (Frame.r(p) < 90 && Frame.g(p) < 90 && Frame.b(p) < 90) txt++;
+            }
+            if (dk >= 2 && txt >= 3) return new int[]{1, cx, cy};
+        }
+        return none;
+    }
 }
