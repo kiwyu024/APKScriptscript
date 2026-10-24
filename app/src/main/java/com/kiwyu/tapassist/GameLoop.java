@@ -28,6 +28,7 @@ public class GameLoop implements Runnable {
     int adFallbackTries = 0;
     int xTaps = 0;              // X taps on the current ad that didn't close it
     int continueTaps = 0;       // taps on the ad's "Continue ▷|" button
+    int skipIconTaps = 0;       // taps on a bare "▷|" skip icon in a top corner
     long adFirstSeen = 0, lastForcedBack = 0;   // hard limit: Back after 100 s in an ad, whatever else happens
     long firstXTap = 0;
     long unknownSince = 0;
@@ -124,7 +125,7 @@ public class GameLoop implements Runnable {
             return;
         }
         if (adStart > 0) { adStart = 0; discTaps = 0; adEndedAt = now; adFallbackTries = 0; xTaps = 0; firstXTap = 0; }
-        adFirstSeen = 0; continueTaps = 0;
+        adFirstSeen = 0; continueTaps = 0; skipIconTaps = 0;
 
         if (replay != null) {
             unknownSince = 0;
@@ -223,7 +224,7 @@ public class GameLoop implements Runnable {
 
     void endFalseAd() {
         adStart = 0; discTaps = 0; xTaps = 0; firstXTap = 0;
-        adFirstSeen = 0; continueTaps = 0;
+        adFirstSeen = 0; continueTaps = 0; skipIconTaps = 0;
         expectAdUntil = 0;
         adFallbackTries = 0;
     }
@@ -363,6 +364,18 @@ public class GameLoop implements Runnable {
                 if (cfg.logTaps) log.event("ad: no X, tapping the Continue button");
                 tap(c[0], c[1], c[2], c[3], "ad_next", "continue");
                 continueTaps++;
+                lastAdTap = System.currentTimeMillis();
+                return;
+            }
+        }
+        if (x[0] < cfg.xThreshold && skipIconTaps < 3 && secs >= 2) {
+            // a bare "▷|" skip icon in a top corner (its circle is nearly the page colour)
+            int[] k = Vision.findCornerSkipIcon(f);
+            if (k[0] > 0) {
+                svc.status("Ad: tapping the skip icon at " + k[1] + "," + k[2] + " (" + secs + "s)");
+                if (cfg.logTaps) log.event("ad: no X, tapping the corner skip icon");
+                tap(k[1], k[2], 4, 4, "ad_next", "skip_icon");
+                skipIconTaps++;
                 lastAdTap = System.currentTimeMillis();
                 return;
             }

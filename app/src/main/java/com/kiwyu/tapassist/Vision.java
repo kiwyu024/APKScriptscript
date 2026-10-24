@@ -472,4 +472,91 @@ public class Vision {
         }
         return none;
     }
+
+    /** How far right of x0 the last dark pixel on row y is (within x0..x1), 0 if none. */
+    static int rowExtent(Frame f, int x0, int x1, int y) {
+        int last = -1;
+        for (int x = x0; x <= x1; x++) if (neutralDark(f.get(x, y))) last = x;
+        return last < 0 ? 0 : last - x0 + 1;
+    }
+
+    static boolean neutralDark(int p) {
+        int r = Frame.r(p), g = Frame.g(p), b = Frame.b(p);
+        return r < 110 && g < 110 && b < 110 && Math.max(r, Math.max(g, b)) - Math.min(r, Math.min(g, b)) < 30;
+    }
+
+    /**
+     * A small dark "▷|" skip icon (triangle + bar) sitting alone on a light background in a top corner,
+     * where the X usually is - for ads whose skip circle is almost the same colour as the page.
+     * Returns {score, x, y}; score 0 if none.
+     */
+    public static int[] findCornerSkipIcon(Frame f) {
+        int[] none = {0, 0, 0};
+        int y0 = Math.round(f.h * 0.045f), y1 = Math.round(f.h * 0.10f);   // below the status bar, the X band
+        int minS = Math.round(f.w * 0.012f), maxS = Math.round(f.w * 0.05f);
+        int[][] ranges = {{Math.round(f.w * 0.75f), f.w - 2}, {1, Math.round(f.w * 0.25f)}};
+        boolean[] seen = new boolean[f.w * f.h];
+        for (int[] xr : ranges)
+            for (int y = y0; y < y1; y += 2)
+                for (int x = xr[0]; x < xr[1]; x += 2) {
+                    int i = y * f.w + x;
+                    if (seen[i] || !neutralDark(f.px[i])) continue;
+                    // flood the dark blob (bounded)
+                    int minX = x, maxX = x, minY = y, maxY = y, count = 0;
+                    java.util.ArrayDeque<Integer> q = new java.util.ArrayDeque<>();
+                    q.add(i); seen[i] = true;
+                    while (!q.isEmpty() && count < 6000) {
+                        int c = q.poll(), cx = c % f.w, cy = c / f.w;
+                        count++;
+                        minX = Math.min(minX, cx); maxX = Math.max(maxX, cx); minY = Math.min(minY, cy); maxY = Math.max(maxY, cy);
+                        int[][] nb = {{1, 0}, {-1, 0}, {0, 1}, {0, -1}};
+                        for (int[] d : nb) {
+                            int nx = cx + d[0], ny = cy + d[1];
+                            if (nx < 0 || ny < 0 || nx >= f.w || ny >= f.h) continue;
+                            int ni = ny * f.w + nx;
+                            if (!seen[ni] && neutralDark(f.px[ni])) { seen[ni] = true; q.add(ni); }
+                        }
+                    }
+                    int bw = maxX - minX + 1, bh = maxY - minY + 1;
+                    if (bw < minS || bh < minS || bw > maxS || bh > maxS) continue;
+                    float fill = count / (float) (bw * bh);
+                    if (fill < 0.15f || fill > 0.75f) continue;
+                    // the "▷|" shape: this blob is the triangle (straight left edge, widest in the middle,
+                    // narrow at top and bottom), with a thin dark bar just to its right
+                    if (bw < bh * 0.5f) continue;
+                    int leftRows = 0;
+                    for (int by = minY; by <= maxY; by++) {
+                        boolean d = false;
+                        for (int bx = minX; bx <= minX + Math.max(2, bw / 4) && !d; bx++) d = neutralDark(f.get(bx, by));
+                        if (d) leftRows++;
+                    }
+                    if (leftRows < bh * 0.8f) continue;
+                    if (rowExtent(f, minX, maxX, (minY + maxY) / 2) < bw * 0.75f) continue;
+                    if (rowExtent(f, minX, maxX, minY + Math.max(1, bh / 8)) > bw * 0.5f) continue;
+                    if (rowExtent(f, minX, maxX, maxY - Math.max(1, bh / 8)) > bw * 0.5f) continue;
+                    boolean bar = false;
+                    for (int bx = maxX + 1; bx <= maxX + bw && bx < f.w && !bar; bx++) {
+                        int dark = 0;
+                        for (int by = minY; by <= maxY; by++) if (neutralDark(f.get(bx, by))) dark++;
+                        if (dark >= bh * 0.7f) {
+                            int wdt = 0;
+                            while (bx + wdt < f.w && wdt <= bw && neutralDark(f.get(bx + wdt, (minY + maxY) / 2))) wdt++;
+                            bar = wdt <= Math.max(3, bw * 0.45f);
+                        }
+                    }
+                    if (!bar) continue;
+                    // alone on a light background: a ring around it is almost all light
+                    int cxm = (minX + maxX) / 2, cym = (minY + maxY) / 2, r = Math.max(bw, bh);
+                    int light = 0, n = 0;
+                    for (int a = 0; a < 32; a++) {
+                        double t = a * Math.PI / 16;
+                        int px = (int) Math.round(cxm + Math.cos(t) * r * 1.3), py = (int) Math.round(cym + Math.sin(t) * r * 1.3);
+                        if (px < 0 || py < 0 || px >= f.w || py >= f.h) continue;
+                        n++;
+                        if (f.lum(px, py) > 215) light++;
+                    }
+                    if (n >= 20 && light >= n * 0.9f) return new int[]{1, cxm, cym};
+                }
+        return none;
+    }
 }
