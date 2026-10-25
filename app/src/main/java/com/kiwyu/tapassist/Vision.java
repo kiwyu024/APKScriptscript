@@ -559,4 +559,53 @@ public class Vision {
                 }
         return none;
     }
+
+    static boolean dialogBlue(int p) {
+        int r = Frame.r(p), g = Frame.g(p), b = Frame.b(p);
+        return r < 100 && g >= 105 && g <= 160 && b > 215;
+    }
+
+    /**
+     * The "Close Ad? You will lose your reward" box: a solid blue RESUME button on a white box with the
+     * blue "CLOSE" text to its left. Returns {score, x, y} of RESUME; score 0 if none.
+     */
+    public static int[] findResumeButton(Frame f) {
+        int[] none = {0, 0, 0};
+        int start = -1, last = -1, l = 0, r = 0;
+        for (int y = Math.round(f.h * 0.20f); y < Math.round(f.h * 0.90f); y += 2) {
+            int run = 0, best = 0, end = -1;
+            for (int x = 0; x < f.w; x++) {
+                if (dialogBlue(f.px[y * f.w + x])) { run++; if (run > best) { best = run; end = x; } }
+                else run = 0;
+            }
+            boolean on = best >= f.w * 0.06f && best <= f.w * 0.40f;
+            if (on) {
+                if (start < 0) { start = y; l = end - best + 1; r = end; }
+                last = y;
+                l = Math.min(l, end - best + 1); r = Math.max(r, end);
+                continue;
+            }
+            if (start >= 0 && y - last > f.h * 0.02f) {   // the white RESUME letters split the blue: bridge them
+                int[] hit = checkResume(f, start, last, l, r);
+                if (hit != null) return hit;
+                start = -1;
+            }
+        }
+        return none;
+    }
+
+    static int[] checkResume(Frame f, int top, int bot, int l, int r) {
+        int hgt = bot - top;
+        if (hgt < f.h * 0.022f || hgt > f.h * 0.065f) return null;
+        int cy = (top + bot) / 2;
+        // white box around the button (above, below, both sides)
+        int[][] pts = {{l - 12, cy}, {r + 12, cy}, {(l + r) / 2, top - 14}, {(l + r) / 2, bot + 14}, {l - 12, top - 14}, {r + 12, bot + 14}};
+        for (int[] p : pts) if (f.lum(p[0], p[1]) < 240) return null;
+        // blue "CLOSE" text to the left on the same rows (scattered blue, not a solid button)
+        int blue = 0;
+        for (int x = Math.max(0, l - Math.round(f.w * 0.30f)); x < l - 15; x++)
+            for (int y = top; y <= bot; y += 3) if (dialogBlue(f.get(x, y))) blue++;
+        if (blue < 8) return null;
+        return new int[]{1, (l + r) / 2, cy};
+    }
 }

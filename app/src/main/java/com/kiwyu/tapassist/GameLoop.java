@@ -29,6 +29,8 @@ public class GameLoop implements Runnable {
     int xTaps = 0;              // X taps on the current ad that didn't close it
     int continueTaps = 0;       // taps on the ad's "Continue ▷|" button
     int skipIconTaps = 0;       // taps on a bare "▷|" skip icon in a top corner
+    int resumeTaps = 0;         // "Close Ad? You will lose your reward" -> RESUME taps for the current ad
+    long adPauseUntil = 0;      // after RESUME: leave the ad alone until then (20 s the first time, then 10 s)
     long adFirstSeen = 0, lastForcedBack = 0;   // hard limit: Back after 100 s in an ad, whatever else happens
     long firstXTap = 0;
     long unknownSince = 0;
@@ -125,7 +127,7 @@ public class GameLoop implements Runnable {
             return;
         }
         if (adStart > 0) { adStart = 0; discTaps = 0; adEndedAt = now; adFallbackTries = 0; xTaps = 0; firstXTap = 0; }
-        adFirstSeen = 0; continueTaps = 0; skipIconTaps = 0;
+        adFirstSeen = 0; continueTaps = 0; skipIconTaps = 0; resumeTaps = 0; adPauseUntil = 0;
 
         if (replay != null) {
             unknownSince = 0;
@@ -224,7 +226,7 @@ public class GameLoop implements Runnable {
 
     void endFalseAd() {
         adStart = 0; discTaps = 0; xTaps = 0; firstXTap = 0;
-        adFirstSeen = 0; continueTaps = 0; skipIconTaps = 0;
+        adFirstSeen = 0; continueTaps = 0; skipIconTaps = 0; resumeTaps = 0; adPauseUntil = 0;
         expectAdUntil = 0;
         adFallbackTries = 0;
     }
@@ -322,6 +324,33 @@ public class GameLoop implements Runnable {
             return;
         }
         long secs = (now - adStart) / 1000;
+        // "Close Ad? You will lose your reward": tap RESUME, then leave the ad alone for 20 s (10 s on
+        // later times) before trying to close it again.
+        if (now < adPauseUntil) {
+            svc.status("Ad: resumed — trying again in " + ((adPauseUntil - now) / 1000 + 1) + "s");
+            return;
+        }
+        int[] resume = null;
+        for (AccessibilityNodeInfo n : svc.findNodes(new String[]{"resume"}, true)) {
+            Rect b = new Rect();
+            n.getBoundsInScreen(b);
+            if (!b.isEmpty()) { resume = new int[]{b.centerX(), b.centerY(), Math.max(4, b.width() / 4), Math.max(4, b.height() / 4)}; break; }
+        }
+        if (resume == null) {
+            int[] v = Vision.findResumeButton(f);
+            if (v[0] > 0) resume = new int[]{v[1], v[2], Math.round(f.w * 0.04f), Math.round(f.h * 0.008f)};
+        }
+        if (resume != null) {
+            long wait = resumeTaps == 0 ? 20000 : 10000;
+            svc.status("Ad: 'Close Ad?' — tapping RESUME, trying again in " + wait / 1000 + "s");
+            if (cfg.logTaps) log.event("ad: 'Close Ad?' box, tapping RESUME (" + (resumeTaps + 1) + "), waiting " + wait / 1000 + " s");
+            AutoPlayerService.sleep(human.fast(human.reactionPause() + 300, 200));
+            tap(resume[0], resume[1], resume[2], resume[3], "ad_resume", "resume");
+            resumeTaps++;
+            adPauseUntil = System.currentTimeMillis() + wait;
+            lastAdTap = System.currentTimeMillis();
+            return;
+        }
         // Hard limit: whatever else is going on, 100 s into an ad press Back (again every 20 s while it stays).
         if (adFirstSeen == 0) adFirstSeen = now;
         if (now - adFirstSeen >= 100000 && now - lastForcedBack >= 20000) {
